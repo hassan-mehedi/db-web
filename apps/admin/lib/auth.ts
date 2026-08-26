@@ -37,5 +37,11 @@ export function createAuth(options: { allowSignUp?: boolean } = {}) {
   });
 }
 
-export const auth = createAuth();
-export type Auth = typeof auth;
+export type Auth = ReturnType<typeof createAuth>;
+
+let instance: Auth | undefined;
+
+export function getAuth(): Auth {
+  instance ??= createAuth();
+  return instance;
+}
