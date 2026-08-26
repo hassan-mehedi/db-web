@@ -31,6 +31,9 @@ export default async function DatabasePage({ params }: { params: Promise<{ datab
           <Button asChild size="sm" variant="outline">
             <Link href={`/db/${database}/query`}>SQL editor</Link>
           </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/db/${database}/diagram`}>Diagram</Link>
+          </Button>
           <DropDatabaseDialog database={database} />
         </div>
       </div>
