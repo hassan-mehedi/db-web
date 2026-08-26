@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ColumnEditor } from "@/components/column-editor";
+import { DropTableDialog } from "@/components/drop-table-dialog";
 import { Shell } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +48,7 @@ export default async function TablePage({
     <Shell
       crumbs={[{ label: database, href: `/db/${database}` }, { label: schema }, { label: table }]}
     >
-      <div className="mb-4 flex gap-1 border-b">
+      <div className="mb-4 flex items-center gap-1 border-b">
         {TABS.map((t) => (
           <Link
             key={t}
@@ -56,6 +58,9 @@ export default async function TablePage({
             {t}
           </Link>
         ))}
+        <div className="ml-auto pb-2">
+          <DropTableDialog database={database} schema={schema} table={table} />
+        </div>
       </div>
 
       {tab === "data" && data && (
@@ -113,29 +118,7 @@ export default async function TablePage({
       )}
 
       {tab === "columns" && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Column</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Nullable</TableHead>
-              <TableHead>Default</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {details.columns.map((c) => (
-              <TableRow key={c.column_name}>
-                <TableCell className="font-mono">{c.column_name}</TableCell>
-                <TableCell className="font-mono text-xs">
-                  {c.data_type}
-                  {c.character_maximum_length ? `(${c.character_maximum_length})` : ""}
-                </TableCell>
-                <TableCell>{c.is_nullable === "YES" ? "yes" : "no"}</TableCell>
-                <TableCell className="font-mono text-xs">{c.column_default ?? ""}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <ColumnEditor database={database} schema={schema} table={table} columns={details.columns} />
       )}
 
       {tab === "constraints" && (

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CreateTableDialog } from "@/components/create-table-dialog";
 import { DropDatabaseDialog } from "@/components/drop-database-dialog";
 import { EnvBadge } from "@/components/env-badge";
 import { Shell } from "@/components/shell";
@@ -26,6 +27,7 @@ export default async function DatabasePage({ params }: { params: Promise<{ datab
         <h1 className="font-mono text-xl font-semibold">{database}</h1>
         <EnvBadge database={database} />
         <div className="ml-auto flex gap-2">
+          <CreateTableDialog database={database} schemas={schemas.map((s) => s.schema)} />
           <Button asChild size="sm" variant="outline">
             <Link href={`/db/${database}/query`}>SQL editor</Link>
           </Button>

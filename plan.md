@@ -146,6 +146,10 @@ Exit: a new project-env, including PostgREST roles, is a form and one click.
 
 ## Phase D — schema editing (evening 3)
 
+Status 2026-08-26: done and verified locally with Playwright (create table
+with identity pk, batch of add/rename/drop-not-null/type in one transaction,
+a failing batch rolls back fully, drop table with type-to-confirm).
+
 1. `packages/sql/ddl.ts`: typed builders
    - `createTable({ schema, name, columns, primaryKey })`
    - `addColumn`, `alterColumnType`, `setNotNull`, `dropNotNull`,

@@ -1,0 +1,124 @@
+import { describe, expect, it } from "vitest";
+import {
+  alterColumn,
+  alterColumns,
+  createTable,
+  dropTable,
+  isSafeExpression,
+  isValidType,
+} from "./ddl";
+
+describe("isValidType", () => {
+  it.each([
+    "text",
+    "numeric(8,2)",
+    "varchar(255)",
+    "timestamp with time zone",
+    "text[]",
+    "int4[][]",
+  ])("accepts %s", (t) => expect(isValidType(t)).toBe(true));
+  it.each(["text; drop table x", "text)", "", "numeric(a)", "x".repeat(65)])("rejects %s", (t) =>
+    expect(isValidType(t)).toBe(false),
+  );
+});
+
+describe("isSafeExpression", () => {
+  it("accepts now() and literals", () => {
+    expect(isSafeExpression("now()")).toBe(true);
+    expect(isSafeExpression("'a''b'")).toBe(true);
+    expect(isSafeExpression("gen_random_uuid()")).toBe(true);
+  });
+  it("rejects statement separators and comments", () => {
+    expect(isSafeExpression("1; drop table x")).toBe(false);
+    expect(isSafeExpression("1 -- x")).toBe(false);
+    expect(isSafeExpression("1 /* x */")).toBe(false);
+    expect(isSafeExpression("")).toBe(false);
+  });
+});
+
+describe("createTable", () => {
+  it("builds a table with pk and defaults", () => {
+    expect(
+      createTable({
+        schema: "api",
+        name: "posts",
+        columns: [
+          { name: "id", type: "bigint", nullable: false, default: "generated" },
+          { name: "title", type: "text", nullable: false },
+          { name: "body", type: "text", nullable: true },
+          { name: "created_at", type: "timestamptz", nullable: false, default: "now()" },
+        ],
+        primaryKey: ["id"],
+      }),
+    ).toBe(
+      `CREATE TABLE "api"."posts" (\n  "id" bigint NOT NULL DEFAULT generated,\n  "title" text NOT NULL,\n  "body" text,\n  "created_at" timestamptz NOT NULL DEFAULT now(),\n  PRIMARY KEY ("id")\n)`,
+    );
+  });
+  it("rejects empty, duplicate, and unknown pk columns", () => {
+    expect(() => createTable({ schema: "s", name: "t", columns: [], primaryKey: [] })).toThrow();
+    const c = { name: "a", type: "text", nullable: true };
+    expect(() =>
+      createTable({ schema: "s", name: "t", columns: [c, c], primaryKey: [] }),
+    ).toThrow();
+    expect(() =>
+      createTable({ schema: "s", name: "t", columns: [c], primaryKey: ["b"] }),
+    ).toThrow();
+  });
+  it("rejects bad types", () =>
+    expect(() =>
+      createTable({
+        schema: "s",
+        name: "t",
+        columns: [{ name: "a", type: "text; drop", nullable: true }],
+        primaryKey: [],
+      }),
+    ).toThrow());
+});
+
+describe("alterColumn", () => {
+  const s = "public";
+  const t = "items";
+  it("add", () =>
+    expect(
+      alterColumn(s, t, {
+        kind: "add",
+        column: { name: "qty", type: "int", nullable: false, default: "0" },
+      }),
+    ).toBe('ALTER TABLE "public"."items" ADD COLUMN "qty" int NOT NULL DEFAULT 0'));
+  it("drop", () =>
+    expect(alterColumn(s, t, { kind: "drop", column: "qty" })).toBe(
+      'ALTER TABLE "public"."items" DROP COLUMN "qty"',
+    ));
+  it("rename", () =>
+    expect(alterColumn(s, t, { kind: "rename", column: "a", to: "b" })).toBe(
+      'ALTER TABLE "public"."items" RENAME COLUMN "a" TO "b"',
+    ));
+  it("type with using", () =>
+    expect(alterColumn(s, t, { kind: "type", column: "a", type: "int", using: "a::int" })).toBe(
+      'ALTER TABLE "public"."items" ALTER COLUMN "a" TYPE int USING a::int',
+    ));
+  it("nullable", () => {
+    expect(alterColumn(s, t, { kind: "nullable", column: "a", nullable: false })).toBe(
+      'ALTER TABLE "public"."items" ALTER COLUMN "a" SET NOT NULL',
+    );
+    expect(alterColumn(s, t, { kind: "nullable", column: "a", nullable: true })).toBe(
+      'ALTER TABLE "public"."items" ALTER COLUMN "a" DROP NOT NULL',
+    );
+  });
+  it("default set and drop", () => {
+    expect(alterColumn(s, t, { kind: "default", column: "a", default: "now()" })).toBe(
+      'ALTER TABLE "public"."items" ALTER COLUMN "a" SET DEFAULT now()',
+    );
+    expect(alterColumn(s, t, { kind: "default", column: "a", default: null })).toBe(
+      'ALTER TABLE "public"."items" ALTER COLUMN "a" DROP DEFAULT',
+    );
+  });
+  it("batches in order", () =>
+    expect(
+      alterColumns(s, t, [
+        { kind: "drop", column: "a" },
+        { kind: "rename", column: "b", to: "c" },
+      ]),
+    ).toHaveLength(2));
+  it("dropTable", () => expect(dropTable("api", "x")).toBe('DROP TABLE "api"."x"'));
+});
