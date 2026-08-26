@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ColumnEditor } from "@/components/column-editor";
+import { DataGrid } from "@/components/data-grid";
 import { DropTableDialog } from "@/components/drop-table-dialog";
 import { Shell } from "@/components/shell";
 import { Button } from "@/components/ui/button";
@@ -65,35 +66,13 @@ export default async function TablePage({
 
       {tab === "data" && data && (
         <>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {data.columns.map((c) => (
-                    <TableHead key={c} className="font-mono">
-                      {c}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.rows.map((row, i) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: rows have no stable id
-                  <TableRow key={`${page}-${i}`}>
-                    {row.map((cell, j) => (
-                      <TableCell
-                        key={data.columns[j]}
-                        className="max-w-xs truncate font-mono text-xs"
-                        title={cell ?? ""}
-                      >
-                        {cell === null ? <span className="text-muted-foreground">null</span> : cell}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataGrid
+            rel={{ database, schema, table }}
+            columns={data.columns}
+            columnMeta={details.columns}
+            rows={data.rows}
+            primaryKey={data.primaryKey}
+          />
           <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
             <span>
               {data.total === 0

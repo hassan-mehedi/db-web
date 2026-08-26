@@ -6,6 +6,7 @@ import {
   listIndexes,
   listSchemas,
   listTables,
+  quoteIdent,
   quoteQualified,
 } from "@db-web/sql";
 import { type Cell, formatRows } from "./format";
@@ -70,17 +71,28 @@ export async function getTableDetails(database: string, schema: string, table: s
 
 export const PAGE_SIZE = 50;
 
+const primaryKeyColumns = `
+SELECT a.attname
+FROM pg_index i
+JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+WHERE i.indrelid = $1::regclass AND i.indisprimary
+ORDER BY array_position(i.indkey, a.attnum)`;
+
 export async function getTableData(
   database: string,
   schema: string,
   table: string,
   page: number,
-): Promise<{ columns: string[]; rows: Cell[][]; total: number }> {
+): Promise<{ columns: string[]; rows: Cell[][]; total: number; primaryKey: string[] }> {
   return withClient(database, async (c) => {
     const rel = quoteQualified(schema, table);
+    const pk = (await c.query<{ attname: string }>(primaryKeyColumns, [rel])).rows.map(
+      (r) => r.attname,
+    );
+    const orderBy = pk.length ? `ORDER BY ${pk.map(quoteIdent).join(", ")}` : "";
     const [data, count] = await Promise.all([
       c.query({
-        text: `SELECT * FROM ${rel} LIMIT $1 OFFSET $2`,
+        text: `SELECT * FROM ${rel} ${orderBy} LIMIT $1 OFFSET $2`,
         values: [PAGE_SIZE, page * PAGE_SIZE],
         rowMode: "array",
       }),
@@ -90,6 +102,7 @@ export async function getTableData(
       columns: data.fields.map((f) => f.name),
       rows: formatRows(data.rows as unknown[][]),
       total: Number(count.rows[0]?.n ?? 0),
+      primaryKey: pk,
     };
   });
 }
