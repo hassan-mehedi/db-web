@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DropDatabaseDialog } from "@/components/drop-database-dialog";
 import { EnvBadge } from "@/components/env-badge";
 import { Shell } from "@/components/shell";
 import { Button } from "@/components/ui/button";
@@ -24,9 +25,12 @@ export default async function DatabasePage({ params }: { params: Promise<{ datab
       <div className="mb-4 flex items-center gap-3">
         <h1 className="font-mono text-xl font-semibold">{database}</h1>
         <EnvBadge database={database} />
-        <Button asChild size="sm" variant="outline" className="ml-auto">
-          <Link href={`/db/${database}/query`}>SQL editor</Link>
-        </Button>
+        <div className="ml-auto flex gap-2">
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/db/${database}/query`}>SQL editor</Link>
+          </Button>
+          <DropDatabaseDialog database={database} />
+        </div>
       </div>
       {schemas.map(({ schema, tables }) => (
         <section key={schema} className="mb-8">

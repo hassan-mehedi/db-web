@@ -29,7 +29,12 @@ export function Shell({
             </span>
           ))}
         </nav>
-        <SignOutButton />
+        <div className="flex items-center gap-4">
+          <Link href="/roles" className="text-muted-foreground hover:text-foreground">
+            Roles
+          </Link>
+          <SignOutButton />
+        </div>
       </header>
       <main className="mx-auto max-w-6xl p-6">{children}</main>
     </div>

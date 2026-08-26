@@ -61,3 +61,18 @@ export function bootstrapProjectEnv(input: BootstrapInput): BootstrapPlan {
     ],
   };
 }
+
+export const PROTECTED_DATABASES = new Set(["postgres", "db_web_meta"]);
+
+export function isProtectedDatabase(name: string): boolean {
+  return PROTECTED_DATABASES.has(name) || name.startsWith("template");
+}
+
+export function planToSql(plan: BootstrapPlan): string {
+  const parts = [...plan.clusterStatements];
+  if (plan.databaseStatements.length) {
+    parts.push(`\\c ${plan.clusterStatements[0]?.replace(/^CREATE DATABASE /, "") ?? ""}`);
+    parts.push(...plan.databaseStatements);
+  }
+  return `${parts.join(";\n")};`;
+}

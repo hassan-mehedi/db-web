@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CreateDatabaseDialog } from "@/components/create-database-dialog";
 import { EnvBadge } from "@/components/env-badge";
 import { Shell } from "@/components/shell";
 import {
@@ -19,7 +20,12 @@ export default async function Home() {
   const databases = await getDatabases();
   return (
     <Shell crumbs={[]}>
-      <h1 className="mb-4 text-xl font-semibold">Databases</h1>
+      <div className="mb-4 flex items-center">
+        <h1 className="text-xl font-semibold">Databases</h1>
+        <div className="ml-auto">
+          <CreateDatabaseDialog />
+        </div>
+      </div>
       <Table>
         <TableHeader>
           <TableRow>

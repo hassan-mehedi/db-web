@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { bootstrapProjectEnv, isProdDatabase, isValidDatabaseName } from "./index";
+import {
+  bootstrapProjectEnv,
+  isProdDatabase,
+  isProtectedDatabase,
+  isValidDatabaseName,
+} from "./index";
 
 describe("isValidDatabaseName", () => {
   it.each(["recipes_dev", "tracker_prod", "a1_b2"])("accepts %s", (n) =>
@@ -25,4 +30,11 @@ describe("bootstrapProjectEnv", () => {
   });
   it("rejects invalid names", () =>
     expect(() => bootstrapProjectEnv({ database: "bad", authenticatorPassword: "x" })).toThrow());
+});
+
+describe("isProtectedDatabase", () => {
+  it.each(["postgres", "db_web_meta", "template0", "template1"])("protects %s", (n) =>
+    expect(isProtectedDatabase(n)).toBe(true),
+  );
+  it("allows project databases", () => expect(isProtectedDatabase("recipes_dev")).toBe(false));
 });

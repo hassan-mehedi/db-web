@@ -123,6 +123,11 @@ Exit: browse every database and run ad-hoc SQL from the phone over the tailnet.
 
 The reason the project exists.
 
+Status 2026-08-26: done and verified locally with Playwright (create with
+bootstrap, authenticator login, duplicate error, roles list with superuser
+read-only, create/grant/revoke/drop role, drop database blocked by an open
+connection then forced). Authenticator password is shown once and not stored.
+
 1. `packages/bootstrap`: the §5.2 SQL as a function
    `bootstrapProjectEnv({ database, authenticatorPassword })` returning an
    ordered array of statements. `CREATE DATABASE` is issued alone on the
