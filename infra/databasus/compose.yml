@@ -1,0 +1,19 @@
+# Dokploy compose service. Tailnet only, no domain. UI on http://<tailscale-name>:4005.
+# Image name and tag checked against github.com/databasus/databasus on 2026-08-26.
+services:
+  databasus:
+    image: databasus/databasus:latest
+    restart: unless-stopped
+    ports:
+      - "${TAILSCALE_IP}:4005:4005"
+    volumes:
+      - databasus-data:/databasus-data
+    networks:
+      - dokploy-network
+
+volumes:
+  databasus-data:
+
+networks:
+  dokploy-network:
+    external: true

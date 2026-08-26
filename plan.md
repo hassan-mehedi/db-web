@@ -167,6 +167,12 @@ project's own migration tool.
 
 ## Phase E — deploy and backups
 
+Status 2026-08-26: repo side done. `apps/admin/Dockerfile` builds a 77 MB
+standalone image (tested locally against the dev cluster). `infra/admin/compose.yml`
+and `infra/databasus/compose.yml` bind to `${TAILSCALE_IP}` only. Step by step
+runbook in `infra/README.md`. VPS steps (Dokploy, Tailscale, Databasus, restore
+test, R2) are manual and still open.
+
 1. `infra/admin/compose.yml` with a multi-stage Dockerfile (`output:
    'standalone'`), env: `DATABASE_URL_MAINTENANCE`, `BETTER_AUTH_SECRET`,
    `BETTER_AUTH_URL=http://<tailscale-name>:3000`.
