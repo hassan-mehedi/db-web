@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { ColumnEditor } from "@/components/column-editor";
+import { AddConstraintDialog, DropConstraintButton } from "@/components/constraint-dialogs";
 import { DataGrid } from "@/components/data-grid";
 import { DropTableDialog } from "@/components/drop-table-dialog";
+import { CreateIndexDialog, DropIndexButton } from "@/components/index-dialogs";
 import { Shell } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getTableData, getTableDetails, PAGE_SIZE } from "@/lib/queries";
+import { getSchemasWithTables, getTableData, getTableDetails, PAGE_SIZE } from "@/lib/queries";
 import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +46,14 @@ export default async function TablePage({
 
   const details = await getTableDetails(database, schema, table);
   const data = tab === "data" ? await getTableData(database, schema, table, page) : null;
+  const allTables =
+    tab === "constraints"
+      ? (await getSchemasWithTables(database)).flatMap((s) =>
+          s.tables.map((t) => ({ schema: s.schema, table: t.relname })),
+        )
+      : [];
+  const rel = { database, schema, table };
+  const columnNames = details.columns.map((c) => c.column_name);
 
   return (
     <Shell
@@ -101,57 +111,75 @@ export default async function TablePage({
       )}
 
       {tab === "constraints" && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Definition</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {details.constraints.map((c) => (
-              <TableRow key={c.conname}>
-                <TableCell className="font-mono">{c.conname}</TableCell>
-                <TableCell>{CONSTRAINT_TYPES[c.contype] ?? c.contype}</TableCell>
-                <TableCell className="font-mono text-xs">{c.definition}</TableCell>
-              </TableRow>
-            ))}
-            {details.constraints.length === 0 && (
+        <div className="grid gap-3">
+          <div>
+            <AddConstraintDialog rel={rel} columns={columnNames} tables={allTables} />
+          </div>
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={3} className="text-muted-foreground">
-                  No constraints.
-                </TableCell>
+                <TableHead>Name</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Definition</TableHead>
+                <TableHead />
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {details.constraints.map((c) => (
+                <TableRow key={c.conname}>
+                  <TableCell className="font-mono">{c.conname}</TableCell>
+                  <TableCell>{CONSTRAINT_TYPES[c.contype] ?? c.contype}</TableCell>
+                  <TableCell className="font-mono text-xs">{c.definition}</TableCell>
+                  <TableCell className="text-right">
+                    <DropConstraintButton rel={rel} name={c.conname} />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {details.constraints.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-muted-foreground">
+                    No constraints.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {tab === "indexes" && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Definition</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {details.indexes.map((i) => (
-              <TableRow key={i.indexname}>
-                <TableCell className="font-mono">{i.indexname}</TableCell>
-                <TableCell className="font-mono text-xs">{i.indexdef}</TableCell>
-              </TableRow>
-            ))}
-            {details.indexes.length === 0 && (
+        <div className="grid gap-3">
+          <div>
+            <CreateIndexDialog rel={rel} columns={columnNames} />
+          </div>
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={2} className="text-muted-foreground">
-                  No indexes.
-                </TableCell>
+                <TableHead>Name</TableHead>
+                <TableHead>Definition</TableHead>
+                <TableHead />
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {details.indexes.map((i) => (
+                <TableRow key={i.indexname}>
+                  <TableCell className="font-mono">{i.indexname}</TableCell>
+                  <TableCell className="font-mono text-xs">{i.indexdef}</TableCell>
+                  <TableCell className="text-right">
+                    <DropIndexButton rel={rel} name={i.indexname} />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {details.indexes.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-muted-foreground">
+                    No indexes.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       )}
     </Shell>
   );
