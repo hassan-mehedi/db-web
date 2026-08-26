@@ -77,7 +77,7 @@ dependency so it can be tested in isolation and reused by the seed script.
 5. Run both once on the VPS via `docker exec` as `postgres` (manual).
    Locally, `compose.dev.yml` mounts `infra/sql/` into
    `/docker-entrypoint-initdb.d` so the dev cluster gets the same roles.
-6. Tailscale on VPS, laptop, phone (manual). Confirm `http://<vps>:3000` is the only
+6. Tailscale on VPS, laptop, phone (manual). Confirm `http://<vps>:3100` is the only
    path to the admin app before the app exists.
 
 Exit: the repo installs, `turbo build` runs an empty Next.js app, `app_admin`
@@ -175,8 +175,8 @@ test, R2) are manual and still open.
 
 1. `infra/admin/compose.yml` with a multi-stage Dockerfile (`output:
    'standalone'`), env: `DATABASE_URL_MAINTENANCE`, `BETTER_AUTH_SECRET`,
-   `BETTER_AUTH_URL=http://<tailscale-name>:3000`.
-2. Dokploy compose service pointed at this repo, no domain, port 3000 bound
+   `BETTER_AUTH_URL=http://<tailscale-name>:3100`.
+2. Dokploy compose service pointed at this repo, no domain, host port 3100 bound
    to the Tailscale interface only.
 3. Databasus: deploy, connect to `postgres`, Google Drive destination, daily,
    30-day retention, ntfy webhook. Verify the current image name in the
@@ -215,7 +215,7 @@ this Mac, `CHROMIUM_PATH` pointing at the cached Chromium.
 
 Carried from `db-gateway.md` §10, with additions:
 
-- [ ] Admin app has no public domain; port 3000 bound to the tailnet only
+- [ ] Admin app has no public domain; host port 3100 bound to the tailnet only
 - [ ] Postgres has no published ports
 - [ ] App connects as `app_admin`, never `postgres`
 - [ ] `postgres` superuser password stored only in Dokploy env

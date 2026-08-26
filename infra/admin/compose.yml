@@ -1,5 +1,5 @@
-# Dokploy compose service. No domain. Port 3000 is bound to the Tailscale
-# interface only, so the app is reachable at http://<tailscale-name>:3000
+# Dokploy compose service. No domain. Host port 3100 (3000 is taken by Dokploy) is bound to the Tailscale
+# interface only, so the app is reachable at http://<tailscale-name>:3100
 # and nowhere else. Set TAILSCALE_IP in the Dokploy env to the VPS's 100.x address.
 services:
   admin:
@@ -8,12 +8,12 @@ services:
       dockerfile: apps/admin/Dockerfile
     restart: unless-stopped
     ports:
-      - "${TAILSCALE_IP}:3000:3000"
+      - "${TAILSCALE_IP:?TAILSCALE_IP is required}:3100:3000"
     environment:
       DATABASE_URL_MAINTENANCE: postgres://app_admin:${APP_ADMIN_PASSWORD}@postgres:5432/postgres
       DATABASE_URL_META: postgres://app_admin:${APP_ADMIN_PASSWORD}@postgres:5432/db_web_meta
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      BETTER_AUTH_URL: http://${TAILSCALE_HOSTNAME}:3000
+      BETTER_AUTH_URL: http://${TAILSCALE_HOSTNAME:?TAILSCALE_HOSTNAME is required}:3100
     networks:
       - dokploy-network
 

@@ -40,14 +40,14 @@ bind to the Tailscale IP and are reachable from the tailnet only.
    ssh -L 15432:<postgres-container-ip>:5432 vps
    DATABASE_URL_META=postgres://app_admin:<pw>@localhost:15432/db_web_meta \
    BETTER_AUTH_SECRET=<same as Dokploy> \
-   BETTER_AUTH_URL=http://<hostname>:3000 \
+   BETTER_AUTH_URL=http://<hostname>:3100 \
    pnpm --filter admin seed:admin
    ```
 
    `BETTER_AUTH_SECRET` must match the deployed value: the TOTP secret is
    encrypted with it.
 
-4. Open `http://<hostname>:3000` from a tailnet device. Log in, TOTP, done.
+4. Open `http://<hostname>:3100` from a tailnet device. Log in, TOTP, done.
 
 5. Databasus. Dokploy → Compose → `infra/databasus/compose.yml`, env
    `TAILSCALE_IP`. Open `http://<hostname>:4005`, add the Postgres connection
