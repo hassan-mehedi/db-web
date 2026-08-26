@@ -1,0 +1,18 @@
+# Copy per project-env. Replace {{database}} and set PW / JWT_SECRET in Dokploy env.
+services:
+  postgrest:
+    image: postgrest/postgrest:v13.0.0
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://{{database}}_authenticator:${PW}@postgres:5432/{{database}}
+      PGRST_DB_SCHEMAS: api
+      PGRST_DB_ANON_ROLE: {{database}}_anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_POOL: 6
+      PGRST_OPENAPI_MODE: disabled
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true
