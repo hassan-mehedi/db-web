@@ -187,6 +187,11 @@ test, R2) are manual and still open.
 
 ## Phase F — later, only if it earns it
 
+Status 2026-08-26: all items below are built and verified locally. Playwright
+e2e (login + TOTP, create/query/drop database) runs in CI after the build;
+`pnpm --filter admin e2e` locally needs `DATABASE_URL_MAINTENANCE` and, on
+this Mac, `CHROMIUM_PATH` pointing at the cached Chromium.
+
 - Data grid inline edit, insert, delete (keyed on primary key; tables without
   one stay read-only)
 - FK and index management

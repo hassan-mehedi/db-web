@@ -32,4 +32,6 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm --filter admin exec playwright install --with-deps chromium
+      - run: pnpm --filter admin e2e
       - run: docker build -f apps/admin/Dockerfile -t db-web-admin:ci .

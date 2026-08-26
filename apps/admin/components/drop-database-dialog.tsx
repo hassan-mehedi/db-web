@@ -37,7 +37,6 @@ export function DropDatabaseDialog({ database }: { database: string }) {
       else {
         setOpen(false);
         router.push("/");
-        router.refresh();
       }
     });
   }

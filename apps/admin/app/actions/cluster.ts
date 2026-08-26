@@ -41,7 +41,6 @@ export async function dropDatabaseAction(input: {
   try {
     audit("drop-database", input.database, `DROP DATABASE ${input.database}`);
     await cluster.dropDatabase(input.database, input.force);
-    revalidatePath("/");
     return { ok: true, sql: `DROP DATABASE ${input.database}` };
   } catch (err) {
     return fail(err);

@@ -164,6 +164,27 @@ export function CreateDatabaseDialog() {
                     `PGRST_DB_ANON_ROLE=${roles.anon}`,
                   ].join("\n")}
                 />
+                <p>Or a Dokploy compose service, ready to paste (set JWT_SECRET in its env):</p>
+                <SqlPreview
+                  sql={[
+                    "services:",
+                    `  postgrest-${name.replaceAll("_", "-")}:`,
+                    "    image: postgrest/postgrest:v13.0.0",
+                    "    restart: unless-stopped",
+                    "    environment:",
+                    `      PGRST_DB_URI: postgres://${roles.authenticator}:${password}@postgres:5432/${name}`,
+                    "      PGRST_DB_SCHEMAS: api",
+                    `      PGRST_DB_ANON_ROLE: ${roles.anon}`,
+                    "      PGRST_JWT_SECRET: $" + "{JWT_SECRET}",
+                    "      PGRST_DB_POOL: 6",
+                    "      PGRST_OPENAPI_MODE: disabled",
+                    "    networks:",
+                    "      - dokploy-network",
+                    "networks:",
+                    "  dokploy-network:",
+                    "    external: true",
+                  ].join("\n")}
+                />
               </>
             )}
             <DialogFooter>
