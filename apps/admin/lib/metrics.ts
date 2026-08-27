@@ -37,50 +37,81 @@ export async function statStatementsAvailable(): Promise<boolean> {
   return (rows[0]?.n ?? 0) > 0;
 }
 
+const RETENTION_EVERY_MS = 60 * 60 * 1000;
+let lastRetention = 0;
+
 export async function sampleOnce(): Promise<{ databases: number; statements: number }> {
   const pool = maintenancePool();
   const m = await meta();
   const ts = new Date();
   const stats = (await pool.query<StatRow>(databaseStats)).rows;
-  for (const r of stats) {
+  if (stats.length) {
     await m.query(
       `INSERT INTO metric_sample (ts, database, connections, xact_commit, xact_rollback, blks_hit,
          blks_read, tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted, deadlocks, size_bytes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       SELECT $1, * FROM unnest(
+         $2::text[], $3::int[], $4::bigint[], $5::bigint[], $6::bigint[], $7::bigint[],
+         $8::bigint[], $9::bigint[], $10::bigint[], $11::bigint[], $12::bigint[], $13::bigint[], $14::bigint[])
        ON CONFLICT DO NOTHING`,
       [
         ts,
-        r.datname,
-        r.numbackends,
-        r.xact_commit,
-        r.xact_rollback,
-        r.blks_hit,
-        r.blks_read,
-        r.tup_returned,
-        r.tup_fetched,
-        r.tup_inserted,
-        r.tup_updated,
-        r.tup_deleted,
-        r.deadlocks,
-        r.size_bytes,
+        stats.map((r) => r.datname),
+        stats.map((r) => r.numbackends),
+        stats.map((r) => r.xact_commit),
+        stats.map((r) => r.xact_rollback),
+        stats.map((r) => r.blks_hit),
+        stats.map((r) => r.blks_read),
+        stats.map((r) => r.tup_returned),
+        stats.map((r) => r.tup_fetched),
+        stats.map((r) => r.tup_inserted),
+        stats.map((r) => r.tup_updated),
+        stats.map((r) => r.tup_deleted),
+        stats.map((r) => r.deadlocks),
+        stats.map((r) => r.size_bytes),
       ],
     );
   }
   let statements = 0;
   if (await statStatementsAvailable()) {
     const rows = (await pool.query<StatementRow>(topStatements, [TOP_STATEMENTS])).rows;
-    for (const s of rows) {
+    if (rows.length) {
       await m.query(
         `INSERT INTO statement_sample (ts, database, queryid, query, calls, total_exec_time, mean_exec_time, rows)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`,
-        [ts, s.datname, s.queryid, s.query, s.calls, s.total_exec_time, s.mean_exec_time, s.rows],
+         SELECT $1, * FROM unnest(
+           $2::text[], $3::text[], $4::text[], $5::bigint[], $6::float8[], $7::float8[], $8::bigint[])
+         ON CONFLICT DO NOTHING`,
+        [
+          ts,
+          rows.map((r) => r.datname),
+          rows.map((r) => r.queryid),
+          rows.map((r) => r.query),
+          rows.map((r) => r.calls),
+          rows.map((r) => r.total_exec_time),
+          rows.map((r) => r.mean_exec_time),
+          rows.map((r) => r.rows),
+        ],
       );
     }
     statements = rows.length;
   }
-  await m.query(`DELETE FROM metric_sample WHERE ts < now() - interval '${RETENTION}'`);
-  await m.query(`DELETE FROM statement_sample WHERE ts < now() - interval '${RETENTION}'`);
+  if (Date.now() - lastRetention > RETENTION_EVERY_MS) {
+    lastRetention = Date.now();
+    await m.query(`DELETE FROM metric_sample WHERE ts < now() - interval '${RETENTION}'`);
+    await m.query(`DELETE FROM statement_sample WHERE ts < now() - interval '${RETENTION}'`);
+  }
   return { databases: stats.length, statements };
+}
+
+export async function latestSizes(maxAgeMinutes = 5): Promise<Map<string, number>> {
+  const m = await meta();
+  const { rows } = await m.query<{ database: string; size_bytes: string }>(
+    `SELECT DISTINCT ON (database) database, size_bytes
+     FROM metric_sample
+     WHERE ts > now() - make_interval(mins => $1)
+     ORDER BY database, ts DESC`,
+    [maxAgeMinutes],
+  );
+  return new Map(rows.map((r) => [r.database, Number(r.size_bytes)]));
 }
 
 export type Window = "1h" | "24h" | "7d";
@@ -90,6 +121,7 @@ const WINDOW_INTERVAL: Record<Window, string> = {
   "24h": "24 hours",
   "7d": "7 days",
 };
+const BUCKET_MINUTES: Record<Window, number> = { "1h": 1, "24h": 5, "7d": 30 };
 
 export interface Point {
   ts: string;
@@ -108,6 +140,7 @@ export function getSeries(database: string, window: Window): Promise<Point[]> {
 
 async function querySeries(database: string, window: Window): Promise<Point[]> {
   const m = await meta();
+  const minutes = BUCKET_MINUTES[window];
   const { rows } = await m.query<{
     ts: string;
     connections: number;
@@ -119,7 +152,13 @@ async function querySeries(database: string, window: Window): Promise<Point[]> {
     written: string | null;
     size_bytes: string;
   }>(
-    `SELECT ts::text, connections,
+    `WITH last_in_bucket AS (
+       SELECT DISTINCT ON (date_bin(make_interval(mins => $2), ts, '2000-01-01')) *
+       FROM metric_sample
+       WHERE database = $1 AND ts > now() - interval '${WINDOW_INTERVAL[window]}'
+       ORDER BY date_bin(make_interval(mins => $2), ts, '2000-01-01'), ts DESC
+     )
+     SELECT ts::text, connections,
             xact_commit - lag(xact_commit) OVER w AS commits,
             xact_rollback - lag(xact_rollback) OVER w AS rollbacks,
             blks_hit - lag(blks_hit) OVER w AS hit,
@@ -128,12 +167,12 @@ async function querySeries(database: string, window: Window): Promise<Point[]> {
             (tup_inserted + tup_updated + tup_deleted)
               - lag(tup_inserted + tup_updated + tup_deleted) OVER w AS written,
             size_bytes
-     FROM metric_sample
-     WHERE database = $1 AND ts > now() - interval '${WINDOW_INTERVAL[window]}'
+     FROM last_in_bucket
      WINDOW w AS (ORDER BY ts)
      ORDER BY ts`,
-    [database],
+    [database, minutes],
   );
+  const perMinute = (v: string | null) => Math.max(0, Math.round(Number(v ?? 0) / minutes));
   return rows
     .filter((r) => r.commits !== null)
     .map((r) => {
@@ -142,11 +181,11 @@ async function querySeries(database: string, window: Window): Promise<Point[]> {
       return {
         ts: r.ts,
         connections: r.connections,
-        commits: Math.max(0, Number(r.commits)),
-        rollbacks: Math.max(0, Number(r.rollbacks)),
+        commits: perMinute(r.commits),
+        rollbacks: perMinute(r.rollbacks),
         cache_hit: hit + read > 0 ? hit / (hit + read) : null,
-        rows_read: Math.max(0, Number(r.returned)),
-        rows_written: Math.max(0, Number(r.written)),
+        rows_read: perMinute(r.returned),
+        rows_written: perMinute(r.written),
         size_bytes: Number(r.size_bytes),
       };
     });

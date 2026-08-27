@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { groupByProject } from "@/lib/projects";
-import { getDatabases } from "@/lib/queries";
+import { getDatabaseNames } from "@/lib/queries";
 import { requireSession } from "@/lib/session";
 import { Sidebar } from "./sidebar";
 
 export async function ShellLayout({ children }: { children: ReactNode }) {
   await requireSession();
-  const projects = groupByProject(await getDatabases()).map((p) => ({
+  const names = await getDatabaseNames();
+  const projects = groupByProject(names.map((datname) => ({ datname }))).map((p) => ({
     name: p.name,
     envs: p.envs.map((e) => ({ env: e.env, database: e.database })),
   }));

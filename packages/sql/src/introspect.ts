@@ -1,11 +1,20 @@
-export const listDatabases = `
-SELECT d.datname,
-       pg_size_pretty(pg_database_size(d.datname)) AS size,
-       pg_database_size(d.datname) AS size_bytes,
-       (SELECT count(*) FROM pg_stat_activity a WHERE a.datname = d.datname)::int AS connections
+export const listDatabaseNames = `
+SELECT d.datname
 FROM pg_database d
 WHERE NOT d.datistemplate AND d.datname NOT IN ('postgres', 'db_web_meta')
 ORDER BY d.datname`;
+
+export const listDatabasesWithConnections = `
+SELECT d.datname, coalesce(a.n, 0)::int AS connections
+FROM pg_database d
+LEFT JOIN (SELECT datname, count(*) AS n FROM pg_stat_activity GROUP BY datname) a
+  ON a.datname = d.datname
+WHERE NOT d.datistemplate AND d.datname NOT IN ('postgres', 'db_web_meta')
+ORDER BY d.datname`;
+
+export const databaseSizes = `
+SELECT datname, pg_database_size(datname) AS size_bytes, pg_size_pretty(pg_database_size(datname)) AS size
+FROM pg_database WHERE datname = ANY($1::text[])`;
 
 export const listSchemas = `
 SELECT nspname FROM pg_namespace

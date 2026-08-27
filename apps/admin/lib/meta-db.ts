@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS query_history (
   ran_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS query_history_database_ran_at ON query_history (database, ran_at DESC);
+CREATE INDEX IF NOT EXISTS metric_sample_ts ON metric_sample (ts);
+CREATE INDEX IF NOT EXISTS statement_sample_ts ON statement_sample (ts);
 `;
 
 export function metaPool(): pg.Pool {

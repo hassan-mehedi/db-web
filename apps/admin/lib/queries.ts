@@ -1,9 +1,11 @@
 import { maintenancePool, withClient } from "@db-web/db";
 import {
+  databaseSizes,
   listAllTables,
   listColumns,
   listConstraints,
-  listDatabases,
+  listDatabaseNames,
+  listDatabasesWithConnections,
   listIndexes,
   listSchemas,
   quoteIdent,
@@ -11,6 +13,7 @@ import {
 } from "@db-web/sql";
 import { cache } from "react";
 import { type Cell, formatRows } from "./format";
+import { latestSizes } from "./metrics";
 import { timed } from "./timing";
 
 export interface DatabaseRow {
@@ -43,13 +46,55 @@ export interface IndexRow {
   indexdef: string;
 }
 
+export const getDatabaseNames = cache(
+  (): Promise<string[]> =>
+    timed("database-names", async () => {
+      const { rows } = await maintenancePool().query<{ datname: string }>(listDatabaseNames);
+      return rows.map((r) => r.datname);
+    }),
+);
+
 export const getDatabases = cache(
   (): Promise<DatabaseRow[]> =>
     timed("databases", async () => {
-      const { rows } = await maintenancePool().query<DatabaseRow>(listDatabases);
-      return rows;
+      const [{ rows }, sampled] = await Promise.all([
+        maintenancePool().query<{ datname: string; connections: number }>(
+          listDatabasesWithConnections,
+        ),
+        latestSizes(),
+      ]);
+      const missing = rows.filter((r) => !sampled.has(r.datname)).map((r) => r.datname);
+      const sizes = new Map(sampled);
+      if (missing.length) {
+        const fresh = await maintenancePool().query<{ datname: string; size_bytes: string }>(
+          databaseSizes,
+          [missing],
+        );
+        for (const r of fresh.rows) sizes.set(r.datname, Number(r.size_bytes));
+      }
+      return rows.map((r) => {
+        const bytes = sizes.get(r.datname) ?? 0;
+        return {
+          datname: r.datname,
+          size: prettyBytes(bytes),
+          size_bytes: String(bytes),
+          connections: r.connections,
+        };
+      });
     }),
 );
+
+export function prettyBytes(n: number): string {
+  if (n < 1024) return `${n} bytes`;
+  const units = ["kB", "MB", "GB", "TB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}
 
 export async function getSchemasWithTables(database: string) {
   return timed("tables", () =>

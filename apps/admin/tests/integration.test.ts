@@ -165,3 +165,22 @@ suite("cluster + schema + dml against a real Postgres", () => {
     expect(left.rowCount).toBe(0);
   });
 });
+
+const metaSuite = url && process.env.DATABASE_URL_META ? describe : describe.skip;
+
+metaSuite("sampler against a real Postgres", () => {
+  it("samples in one insert per table and serves bucketed series", async () => {
+    const { getSeries, latestSizes, sampleOnce } = await import("../lib/metrics");
+    const { getDatabases } = await import("../lib/queries");
+    const first = await sampleOnce();
+    expect(first.databases).toBeGreaterThan(0);
+    const sizes = await latestSizes();
+    expect(sizes.size).toBe(first.databases);
+    const dbs = await getDatabases();
+    for (const d of dbs) expect(Number(d.size_bytes)).toBe(sizes.get(d.datname));
+    await sampleOnce();
+    const series = await getSeries(dbs[0]?.datname ?? "", "7d");
+    expect(Array.isArray(series)).toBe(true);
+    for (const p of series) expect(p.commits).toBeGreaterThanOrEqual(0);
+  });
+});
