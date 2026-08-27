@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { logRender } from "@/lib/timing";
 
 export interface Crumb {
   label: string;
@@ -18,6 +19,7 @@ export function AppShell({
   children: ReactNode;
   wide?: boolean;
 }) {
+  const timing = logRender(`/${crumbs.map((c) => c.label).join("/")}`);
   return (
     <>
       <header className="flex h-12 items-center gap-2 border-b px-6 text-sm">
@@ -38,7 +40,15 @@ export function AppShell({
             </span>
           ))}
         </nav>
-        {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+        <div className="ml-auto flex items-center gap-3">
+          {actions}
+          <span
+            className="font-mono text-[10px] text-muted-foreground/60"
+            title={timing.entries.map((e) => `${e.label} ${e.ms} ms`).join("\n") || "no queries"}
+          >
+            {timing.total} ms
+          </span>
+        </div>
       </header>
       <main className={wide ? "flex min-h-0 flex-1 flex-col" : "mx-auto w-full max-w-6xl p-6"}>
         {children}

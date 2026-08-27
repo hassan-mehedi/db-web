@@ -1,6 +1,7 @@
 import { maintenancePool } from "@db-web/db";
 import { databaseStats, hasStatStatements, listActivity, topStatements } from "@db-web/sql";
 import { meta } from "./meta-db";
+import { timed } from "./timing";
 
 const RETENTION = "7 days";
 const TOP_STATEMENTS = 20;
@@ -101,7 +102,11 @@ export interface Point {
   size_bytes: number;
 }
 
-export async function getSeries(database: string, window: Window): Promise<Point[]> {
+export function getSeries(database: string, window: Window): Promise<Point[]> {
+  return timed("series", () => querySeries(database, window));
+}
+
+async function querySeries(database: string, window: Window): Promise<Point[]> {
   const m = await meta();
   const { rows } = await m.query<{
     ts: string;
@@ -156,7 +161,11 @@ export interface StatementSummary {
   rows: number;
 }
 
-export async function getTopStatements(database: string): Promise<StatementSummary[]> {
+export function getTopStatements(database: string): Promise<StatementSummary[]> {
+  return timed("statements", () => queryTopStatements(database));
+}
+
+async function queryTopStatements(database: string): Promise<StatementSummary[]> {
   const m = await meta();
   const { rows } = await m.query<StatementSummary>(
     `SELECT queryid, query, calls::int, total_exec_time, mean_exec_time, rows::int
@@ -181,9 +190,11 @@ export interface ActivityRow {
   query: string;
 }
 
-export async function getActivity(database: string): Promise<ActivityRow[]> {
-  const { rows } = await maintenancePool().query<ActivityRow>(listActivity, [database]);
-  return rows;
+export function getActivity(database: string): Promise<ActivityRow[]> {
+  return timed("activity", async () => {
+    const { rows } = await maintenancePool().query<ActivityRow>(listActivity, [database]);
+    return rows;
+  });
 }
 
 export async function lastSampleAt(): Promise<string | null> {

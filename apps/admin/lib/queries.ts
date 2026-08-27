@@ -11,6 +11,7 @@ import {
 } from "@db-web/sql";
 import { cache } from "react";
 import { type Cell, formatRows } from "./format";
+import { timed } from "./timing";
 
 export interface DatabaseRow {
   datname: string;
@@ -42,33 +43,40 @@ export interface IndexRow {
   indexdef: string;
 }
 
-export const getDatabases = cache(async (): Promise<DatabaseRow[]> => {
-  const { rows } = await maintenancePool().query<DatabaseRow>(listDatabases);
-  return rows;
-});
+export const getDatabases = cache(
+  (): Promise<DatabaseRow[]> =>
+    timed("databases", async () => {
+      const { rows } = await maintenancePool().query<DatabaseRow>(listDatabases);
+      return rows;
+    }),
+);
 
 export async function getSchemasWithTables(database: string) {
-  return withClient(database, async (c) => {
-    const [schemas, tables] = await Promise.all([
-      c.query<{ nspname: string }>(listSchemas),
-      c.query<TableRow>(listAllTables),
-    ]);
-    return schemas.rows.map(({ nspname }) => ({
-      schema: nspname,
-      tables: tables.rows.filter((t) => t.nspname === nspname),
-    }));
-  });
+  return timed("tables", () =>
+    withClient(database, async (c) => {
+      const [schemas, tables] = await Promise.all([
+        c.query<{ nspname: string }>(listSchemas),
+        c.query<TableRow>(listAllTables),
+      ]);
+      return schemas.rows.map(({ nspname }) => ({
+        schema: nspname,
+        tables: tables.rows.filter((t) => t.nspname === nspname),
+      }));
+    }),
+  );
 }
 
 export async function getTableDetails(database: string, schema: string, table: string) {
-  return withClient(database, async (c) => {
-    const [columns, constraints, indexes] = await Promise.all([
-      c.query<ColumnRow>(listColumns, [schema, table]),
-      c.query<ConstraintRow>(listConstraints, [quoteQualified(schema, table)]),
-      c.query<IndexRow>(listIndexes, [schema, table]),
-    ]);
-    return { columns: columns.rows, constraints: constraints.rows, indexes: indexes.rows };
-  });
+  return timed("table-details", () =>
+    withClient(database, async (c) => {
+      const [columns, constraints, indexes] = await Promise.all([
+        c.query<ColumnRow>(listColumns, [schema, table]),
+        c.query<ConstraintRow>(listConstraints, [quoteQualified(schema, table)]),
+        c.query<IndexRow>(listIndexes, [schema, table]),
+      ]);
+      return { columns: columns.rows, constraints: constraints.rows, indexes: indexes.rows };
+    }),
+  );
 }
 
 export const PAGE_SIZE = 50;
@@ -86,25 +94,27 @@ export async function getTableData(
   table: string,
   page: number,
 ): Promise<{ columns: string[]; rows: Cell[][]; total: number; primaryKey: string[] }> {
-  return withClient(database, async (c) => {
-    const rel = quoteQualified(schema, table);
-    const pk = (await c.query<{ attname: string }>(primaryKeyColumns, [rel])).rows.map(
-      (r) => r.attname,
-    );
-    const orderBy = pk.length ? `ORDER BY ${pk.map(quoteIdent).join(", ")}` : "";
-    const [data, count] = await Promise.all([
-      c.query({
-        text: `SELECT * FROM ${rel} ${orderBy} LIMIT $1 OFFSET $2`,
-        values: [PAGE_SIZE, page * PAGE_SIZE],
-        rowMode: "array",
-      }),
-      c.query<{ n: string }>(`SELECT count(*)::text AS n FROM ${rel}`),
-    ]);
-    return {
-      columns: data.fields.map((f) => f.name),
-      rows: formatRows(data.rows as unknown[][]),
-      total: Number(count.rows[0]?.n ?? 0),
-      primaryKey: pk,
-    };
-  });
+  return timed("table-data", () =>
+    withClient(database, async (c) => {
+      const rel = quoteQualified(schema, table);
+      const pk = (await c.query<{ attname: string }>(primaryKeyColumns, [rel])).rows.map(
+        (r) => r.attname,
+      );
+      const orderBy = pk.length ? `ORDER BY ${pk.map(quoteIdent).join(", ")}` : "";
+      const [data, count] = await Promise.all([
+        c.query({
+          text: `SELECT * FROM ${rel} ${orderBy} LIMIT $1 OFFSET $2`,
+          values: [PAGE_SIZE, page * PAGE_SIZE],
+          rowMode: "array",
+        }),
+        c.query<{ n: string }>(`SELECT count(*)::text AS n FROM ${rel}`),
+      ]);
+      return {
+        columns: data.fields.map((f) => f.name),
+        rows: formatRows(data.rows as unknown[][]),
+        total: Number(count.rows[0]?.n ?? 0),
+        primaryKey: pk,
+      };
+    }),
+  );
 }
