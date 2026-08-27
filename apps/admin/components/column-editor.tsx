@@ -15,6 +15,7 @@ import { firstReference, ReferencePicker } from "@/components/reference-picker";
 import { SqlPreview } from "@/components/sql-preview";
 import { TypeInput } from "@/components/type-input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -220,29 +221,29 @@ export function ColumnEditor({ database, schema, table, columns, tables }: Props
                 onChange={(e) => setDraft({ ...draft, default: e.target.value })}
               />
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="col-nullable"
                 checked={draft.nullable}
-                onChange={(e) => setDraft({ ...draft, nullable: e.target.checked })}
+                onCheckedChange={(c) => setDraft({ ...draft, nullable: c === true })}
               />
-              Nullable
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Label htmlFor="col-nullable">Nullable</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="col-fk"
                 checked={!!draft.references}
-                onChange={(e) => {
+                onCheckedChange={(c) => {
                   const { references, ...rest } = draft;
                   setDraft(
-                    e.target.checked
+                    c === true
                       ? { ...rest, references: references ?? firstReference(tables, schema) }
                       : rest,
                   );
                 }}
               />
-              Foreign key
-            </label>
+              <Label htmlFor="col-fk">Foreign key</Label>
+            </div>
             {draft.references && (
               <ReferencePicker
                 tables={tables}

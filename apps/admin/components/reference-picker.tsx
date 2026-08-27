@@ -92,7 +92,7 @@ export function ReferencePicker({ tables, value, onChange, idPrefix, className }
   );
 }
 
-function ActionSelect({
+export function ActionSelect({
   id,
   label,
   value,

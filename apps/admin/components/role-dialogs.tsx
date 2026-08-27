@@ -12,6 +12,7 @@ import {
 import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { generatePassword } from "@/lib/password";
 
 function useAction() {
@@ -118,33 +126,33 @@ export function CreateRoleDialog() {
                 autoFocus
               />
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="role-login"
                 checked={login}
-                onChange={(e) => {
-                  setLogin(e.target.checked);
-                  setPassword(e.target.checked ? generatePassword() : "");
+                onCheckedChange={(c) => {
+                  setLogin(c === true);
+                  setPassword(c === true ? generatePassword() : "");
                 }}
               />
-              Can log in (password generated)
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Label htmlFor="role-login">Can log in (password generated)</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="role-createdb"
                 checked={createdb}
-                onChange={(e) => setCreatedb(e.target.checked)}
+                onCheckedChange={(c) => setCreatedb(c === true)}
               />
-              CREATEDB
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Label htmlFor="role-createdb">CREATEDB</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="role-createrole"
                 checked={createrole}
-                onChange={(e) => setCreaterole(e.target.checked)}
+                onCheckedChange={(c) => setCreaterole(c === true)}
               />
-              CREATEROLE
-            </label>
+              <Label htmlFor="role-createrole">CREATEROLE</Label>
+            </div>
             {valid && <SqlPreview sql={sql.replace(/PASSWORD '.*'/, "PASSWORD '…'")} />}
             <FormError error={error} />
             <DialogFooter>
@@ -193,20 +201,20 @@ export function GrantRoleDialog({ to, roles }: { to: string; roles: string[] }) 
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
-          <select
-            className="rounded border bg-background p-2 font-mono text-sm"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-          >
-            <option value="">choose a role</option>
-            {roles
-              .filter((r) => r !== to)
-              .map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-          </select>
+          <Select value={role} onValueChange={setRole}>
+            <SelectTrigger className="w-full font-mono" aria-label="role to grant">
+              <SelectValue placeholder="choose a role" />
+            </SelectTrigger>
+            <SelectContent>
+              {roles
+                .filter((r) => r !== to)
+                .map((r) => (
+                  <SelectItem key={r} value={r} className="font-mono">
+                    {r}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
           {role && <SqlPreview sql={`GRANT "${role}" TO "${to}"`} />}
           <FormError error={error} />
           <DialogFooter>

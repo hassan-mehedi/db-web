@@ -8,6 +8,7 @@ import { ConfirmSqlButton } from "@/components/confirm-sql-button";
 import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Rel } from "@/lib/dml";
 
 export function ColumnPicker({
@@ -36,16 +44,15 @@ export function ColumnPicker({
       <span className="text-sm">{label}</span>
       <div className="flex flex-wrap gap-2">
         {columns.map((c) => (
-          <label key={c} className="flex items-center gap-1 font-mono text-xs">
-            <input
-              type="checkbox"
+          <Label key={c} className="flex items-center gap-1.5 font-mono text-xs font-normal">
+            <Checkbox
               checked={value.includes(c)}
-              onChange={(e) =>
-                onChange(e.target.checked ? [...value, c] : value.filter((v) => v !== c))
+              onCheckedChange={(checked) =>
+                onChange(checked === true ? [...value, c] : value.filter((v) => v !== c))
               }
             />
             {c}
-          </label>
+          </Label>
         ))}
       </div>
     </div>
@@ -116,25 +123,26 @@ export function CreateIndexDialog({ rel, columns }: { rel: Rel; columns: string[
             />
           </div>
           <div className="flex items-center gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="idx-unique"
                 checked={unique}
-                onChange={(e) => setUnique(e.target.checked)}
+                onCheckedChange={(c) => setUnique(c === true)}
               />
-              Unique
-            </label>
-            <select
-              className="rounded border bg-background p-1 font-mono text-xs"
-              value={method}
-              onChange={(e) => setMethod(e.target.value as IndexMethod)}
-            >
-              {INDEX_METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
+              <Label htmlFor="idx-unique">Unique</Label>
+            </div>
+            <Select value={method} onValueChange={(m) => setMethod(m as IndexMethod)}>
+              <SelectTrigger className="w-32 font-mono" aria-label="index method">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INDEX_METHODS.map((m) => (
+                  <SelectItem key={m} value={m} className="font-mono">
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {sql && <SqlPreview sql={sql} />}
           <FormError error={error} />

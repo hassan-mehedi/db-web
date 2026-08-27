@@ -5,7 +5,6 @@ import {
   addForeignKey,
   addUnique,
   dropConstraint,
-  FK_ACTIONS,
   type FkAction,
   isSafeExpression,
 } from "@db-web/sql";
@@ -20,6 +19,7 @@ import {
 import { ConfirmSqlButton } from "@/components/confirm-sql-button";
 import { FormError } from "@/components/form-error";
 import { ColumnPicker } from "@/components/index-dialogs";
+import { ActionSelect } from "@/components/reference-picker";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { Rel } from "@/lib/dml";
 
 type Kind = "foreign key" | "unique" | "check";
@@ -119,14 +120,19 @@ export function AddConstraintDialog({
           <DialogTitle>Add constraint</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4">
-          <div className="flex gap-3 text-sm">
+          <RadioGroup
+            value={kind}
+            onValueChange={(k) => setKind(k as Kind)}
+            className="flex gap-4"
+            aria-label="constraint kind"
+          >
             {(["foreign key", "unique", "check"] as Kind[]).map((k) => (
-              <label key={k} className="flex items-center gap-1">
-                <input type="radio" name="kind" checked={kind === k} onChange={() => setKind(k)} />
-                {k}
-              </label>
+              <div key={k} className="flex items-center gap-2">
+                <RadioGroupItem id={`kind-${k.replace(" ", "-")}`} value={k} />
+                <Label htmlFor={`kind-${k.replace(" ", "-")}`}>{k}</Label>
+              </div>
             ))}
-          </div>
+          </RadioGroup>
           <div className="grid gap-1">
             <Label htmlFor="con-name">Name {kind === "check" ? "" : "(optional)"}</Label>
             <Input
@@ -166,31 +172,19 @@ export function AddConstraintDialog({
                   onChange={(e) => setRefColumns(e.target.value)}
                 />
               </div>
-              <div className="flex gap-4 text-sm">
-                <label className="flex items-center gap-2">
-                  on delete
-                  <select
-                    className="rounded border bg-background p-1 text-xs"
-                    value={onDelete}
-                    onChange={(e) => setOnDelete(e.target.value as FkAction)}
-                  >
-                    {FK_ACTIONS.map((a) => (
-                      <option key={a}>{a}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center gap-2">
-                  on update
-                  <select
-                    className="rounded border bg-background p-1 text-xs"
-                    value={onUpdate}
-                    onChange={(e) => setOnUpdate(e.target.value as FkAction)}
-                  >
-                    {FK_ACTIONS.map((a) => (
-                      <option key={a}>{a}</option>
-                    ))}
-                  </select>
-                </label>
+              <div className="grid grid-cols-2 gap-3">
+                <ActionSelect
+                  id="fk-on-delete"
+                  label="On delete"
+                  value={onDelete}
+                  onChange={setOnDelete}
+                />
+                <ActionSelect
+                  id="fk-on-update"
+                  label="On update"
+                  value={onUpdate}
+                  onChange={setOnUpdate}
+                />
               </div>
             </>
           )}

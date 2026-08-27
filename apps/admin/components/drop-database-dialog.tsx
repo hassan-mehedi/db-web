@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { dropDatabaseAction } from "@/app/actions/cluster";
 import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -82,10 +83,14 @@ export function DropDatabaseDialog({ database }: { database: string }) {
               />
             </div>
           )}
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
-            Terminate open connections first
-          </label>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="drop-force"
+              checked={force}
+              onCheckedChange={(c) => setForce(c === true)}
+            />
+            <Label htmlFor="drop-force">Terminate open connections first</Label>
+          </div>
           <FormError error={error} />
           <DialogFooter>
             <Button variant="destructive" onClick={drop} disabled={!confirmed || pending}>

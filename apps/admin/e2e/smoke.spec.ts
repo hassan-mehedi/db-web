@@ -67,7 +67,7 @@ test("login with TOTP, create, use, clone and drop a database", async ({ page })
     await page.goto(`/projects/e2e/${env}/settings`);
     await page.click("button:has-text('Drop database')");
     await page.fill("#drop-first", `e2e_${env}`);
-    await page.check("[role=dialog] input[type=checkbox]");
+    await page.click("[role=dialog] [role=checkbox]");
     await page.click("[role=dialog] button:has-text('Drop')");
     await page.waitForURL("/projects/e2e");
     await expect(page.locator(`a[href='/projects/e2e/${env}']`)).toHaveCount(0);

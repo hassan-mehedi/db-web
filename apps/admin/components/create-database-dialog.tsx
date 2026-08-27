@@ -12,6 +12,7 @@ import { createDatabaseAction } from "@/app/actions/cluster";
 import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -141,14 +142,16 @@ export function CreateDatabaseDialog({
                 digits. Whole name max 49 chars.
               </p>
             )}
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="db-bootstrap"
                 checked={bootstrap}
-                onChange={(e) => setBootstrap(e.target.checked)}
+                onCheckedChange={(c) => setBootstrap(c === true)}
               />
-              Also set up PostgREST roles and the <code>api</code> schema
-            </label>
+              <Label htmlFor="db-bootstrap">
+                Also set up PostgREST roles and the <code>api</code> schema
+              </Label>
+            </div>
             <DialogFooter>
               <Button onClick={toPreview} disabled={!valid}>
                 Preview SQL

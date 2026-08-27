@@ -7,6 +7,7 @@ import { cloneDatabaseAction, previewCloneAction } from "@/app/actions/cluster";
 import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { generatePassword } from "@/lib/password";
 import { databaseName, isValidProjectEnv, parseDatabaseName } from "@/lib/projects";
 import { envPath } from "@/lib/routes";
@@ -131,18 +139,18 @@ export function CloneDatabaseDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="clone-source">Source</Label>
-                <select
-                  id="clone-source"
-                  value={source}
-                  onChange={(e) => setSource(e.target.value)}
-                  className="h-8 rounded-lg border border-input bg-background px-2 font-mono text-sm"
-                >
-                  {sources.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+                <Select value={source} onValueChange={setSource}>
+                  <SelectTrigger id="clone-source" className="w-full font-mono">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sources.map((s) => (
+                      <SelectItem key={s} value={s} className="font-mono">
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="clone-env">New environment</Label>
@@ -159,15 +167,17 @@ export function CloneDatabaseDialog({
             <p className="text-xs text-muted-foreground">
               Creates <code className="font-mono">{valid ? target : `${project}_…`}</code>
             </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="clone-bootstrap"
                 checked={bootstrap}
-                onChange={(e) => setBootstrap(e.target.checked)}
+                onCheckedChange={(c) => setBootstrap(c === true)}
               />
-              Create PostgREST roles for the new database and grant them on{" "}
-              <code className="font-mono">api</code>
-            </label>
+              <Label htmlFor="clone-bootstrap">
+                Create PostgREST roles for the new database and grant them on{" "}
+                <code className="font-mono">api</code>
+              </Label>
+            </div>
             <FormError error={error} />
             <DialogFooter>
               <Button onClick={toPreview} disabled={!valid || pending}>

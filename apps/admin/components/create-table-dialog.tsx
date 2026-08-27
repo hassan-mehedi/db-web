@@ -10,6 +10,7 @@ import { firstReference, ReferencePicker } from "@/components/reference-picker";
 import { SqlPreview } from "@/components/sql-preview";
 import { TypeInput } from "@/components/type-input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { CompletionSchema } from "@/lib/queries";
 import { tablePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -120,17 +128,18 @@ export function CreateTableDialog({
         {step === "form" ? (
           <div className="grid gap-4">
             <div className="flex gap-2">
-              <select
-                className="rounded border bg-background p-2 font-mono text-sm"
-                value={schema}
-                onChange={(e) => setSchema(e.target.value)}
-              >
-                {schemas.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+              <Select value={schema} onValueChange={setSchema}>
+                <SelectTrigger className="w-40 font-mono" aria-label="schema">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {schemas.map((s) => (
+                    <SelectItem key={s} value={s} className="font-mono">
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Input
                 className="font-mono"
                 placeholder="table_name"
@@ -140,20 +149,20 @@ export function CreateTableDialog({
               />
             </div>
             <div className="grid gap-2">
-              <div className="grid grid-cols-[1fr_1.5fr_1fr_auto_auto_auto_auto] items-center gap-2 text-xs text-muted-foreground">
+              <div className="grid grid-cols-[1fr_1.5fr_1fr_1.75rem_1.75rem_1.75rem_1.75rem] items-center gap-2 text-xs text-muted-foreground">
                 <span>Name</span>
                 <span>Type</span>
                 <span>Default</span>
-                <span>Null</span>
-                <span>PK</span>
-                <span>FK</span>
+                <span className="text-center">Null</span>
+                <span className="text-center">PK</span>
+                <span className="text-center">FK</span>
                 <span />
               </div>
               {rows.map((r, i) => (
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional
                   key={i}
-                  className="grid grid-cols-[1fr_1.5fr_1fr_auto_auto_auto_auto] items-start gap-2"
+                  className="grid grid-cols-[1fr_1.5fr_1fr_1.75rem_1.75rem_1.75rem_1.75rem] items-center gap-2"
                 >
                   <Input
                     className="font-mono"
@@ -170,25 +179,27 @@ export function CreateTableDialog({
                     value={r.default ?? ""}
                     onChange={(e) => update(i, { default: e.target.value })}
                   />
-                  <input
-                    type="checkbox"
-                    aria-label="nullable"
-                    checked={r.nullable}
-                    onChange={(e) => update(i, { nullable: e.target.checked })}
-                  />
-                  <input
-                    type="checkbox"
-                    aria-label="primary key"
-                    checked={r.pk}
-                    onChange={(e) => update(i, { pk: e.target.checked })}
-                  />
+                  <div className="flex h-8 w-7 items-center justify-center">
+                    <Checkbox
+                      aria-label="nullable"
+                      checked={r.nullable}
+                      onCheckedChange={(c) => update(i, { nullable: c === true })}
+                    />
+                  </div>
+                  <div className="flex h-8 w-7 items-center justify-center">
+                    <Checkbox
+                      aria-label="primary key"
+                      checked={r.pk}
+                      onCheckedChange={(c) => update(i, { pk: c === true })}
+                    />
+                  </div>
                   <Button
                     size="icon-sm"
                     variant={r.references ? "secondary" : "ghost"}
+                    className={cn("size-7", r.references && "text-sky-600 dark:text-sky-400")}
                     aria-label={r.references ? "remove foreign key" : "add foreign key"}
                     aria-pressed={!!r.references}
                     disabled={!hasTables}
-                    className={cn(r.references && "text-sky-600 dark:text-sky-400")}
                     onClick={() =>
                       setRows((prev) =>
                         prev.map((row, j) => {
@@ -206,6 +217,7 @@ export function CreateTableDialog({
                   <Button
                     size="icon-sm"
                     variant="ghost"
+                    className="size-7"
                     aria-label="remove column"
                     onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
                   >
