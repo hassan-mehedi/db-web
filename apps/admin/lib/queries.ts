@@ -1,14 +1,15 @@
 import { maintenancePool, withClient } from "@db-web/db";
 import {
+  listAllTables,
   listColumns,
   listConstraints,
   listDatabases,
   listIndexes,
   listSchemas,
-  listTables,
   quoteIdent,
   quoteQualified,
 } from "@db-web/sql";
+import { cache } from "react";
 import { type Cell, formatRows } from "./format";
 
 export interface DatabaseRow {
@@ -41,20 +42,21 @@ export interface IndexRow {
   indexdef: string;
 }
 
-export async function getDatabases(): Promise<DatabaseRow[]> {
+export const getDatabases = cache(async (): Promise<DatabaseRow[]> => {
   const { rows } = await maintenancePool().query<DatabaseRow>(listDatabases);
   return rows;
-}
+});
 
 export async function getSchemasWithTables(database: string) {
   return withClient(database, async (c) => {
-    const schemas = (await c.query<{ nspname: string }>(listSchemas)).rows.map((r) => r.nspname);
-    const out: { schema: string; tables: TableRow[] }[] = [];
-    for (const schema of schemas) {
-      const { rows } = await c.query<TableRow>(listTables, [schema]);
-      out.push({ schema, tables: rows });
-    }
-    return out;
+    const [schemas, tables] = await Promise.all([
+      c.query<{ nspname: string }>(listSchemas),
+      c.query<TableRow>(listAllTables),
+    ]);
+    return schemas.rows.map(({ nspname }) => ({
+      schema: nspname,
+      tables: tables.rows.filter((t) => t.nspname === nspname),
+    }));
   });
 }
 

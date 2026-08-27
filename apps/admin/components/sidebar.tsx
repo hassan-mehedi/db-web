@@ -16,9 +16,9 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
-import { envLabel } from "@/lib/projects";
+import { databaseName, envLabel } from "@/lib/projects";
 import { cn } from "@/lib/utils";
 import { EnvBadge } from "./env-badge";
 import { SignOutButton } from "./sign-out-button";
@@ -30,8 +30,13 @@ export interface SidebarProject {
 
 export interface SidebarProps {
   projects: SidebarProject[];
-  current?: { project: string; env: string; database: string } | undefined;
   backupsUrl?: string | undefined;
+}
+
+interface Current {
+  project: string;
+  env: string | undefined;
+  database: string | undefined;
 }
 
 const ENV_NAV = [
@@ -45,10 +50,18 @@ const ENV_NAV = [
   { key: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-export function Sidebar({ projects, current, backupsUrl }: SidebarProps) {
+export function Sidebar({ projects, backupsUrl }: SidebarProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const base = current ? `/projects/${current.project}/${current.env}` : null;
+  const params = useParams<{ project?: string; env?: string }>();
+  const current: Current | undefined = params.project
+    ? {
+        project: params.project,
+        env: params.env,
+        database: params.env ? databaseName(params.project, params.env) : undefined,
+      }
+    : undefined;
+  const base = current?.env ? `/projects/${current.project}/${current.env}` : null;
 
   const content = (
     <div className="flex h-full flex-col">
@@ -138,7 +151,7 @@ export function Sidebar({ projects, current, backupsUrl }: SidebarProps) {
         <Link href="/projects" className="font-semibold">
           db-web
         </Link>
-        {current && (
+        {current?.database && (
           <span className="ml-auto flex items-center gap-2 font-mono text-xs">
             {current.database}
             <EnvBadge database={current.database} />
@@ -185,7 +198,13 @@ function NavLink({
   );
 }
 
-function ProjectSwitcher({ projects, current }: Pick<SidebarProps, "projects" | "current">) {
+function ProjectSwitcher({
+  projects,
+  current,
+}: {
+  projects: SidebarProject[];
+  current: Current | undefined;
+}) {
   const [expanded, setExpanded] = useState(false);
   const project = projects.find((p) => p.name === current?.project);
 

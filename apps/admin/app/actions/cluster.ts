@@ -26,7 +26,7 @@ export async function createDatabaseAction(input: {
     const sql = planToSql(plan);
     audit("create-database", input.database, sql);
     await cluster.createDatabase(plan, input.database);
-    revalidatePath("/projects");
+    revalidatePath("/projects", "layout");
     return { ok: true, sql };
   } catch (err) {
     return fail(err);
@@ -50,7 +50,7 @@ export async function cloneDatabaseAction(input: {
       `${input.force ? "-- terminate source backends\n" : ""}${sql}`,
     );
     await cluster.cloneDatabase(plan, input.source, input.force);
-    revalidatePath("/projects");
+    revalidatePath("/projects", "layout");
     return { ok: true, sql };
   } catch (err) {
     return fail(err);
@@ -81,6 +81,7 @@ export async function dropDatabaseAction(input: {
   try {
     audit("drop-database", input.database, `DROP DATABASE ${input.database}`);
     await cluster.dropDatabase(input.database, input.force);
+    revalidatePath("/projects", "layout");
     return { ok: true, sql: `DROP DATABASE ${input.database}` };
   } catch (err) {
     return fail(err);

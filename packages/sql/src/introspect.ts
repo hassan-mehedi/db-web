@@ -12,14 +12,15 @@ SELECT nspname FROM pg_namespace
 WHERE nspname NOT LIKE 'pg\\_%' AND nspname <> 'information_schema'
 ORDER BY nspname`;
 
-export const listTables = `
+export const listAllTables = `
 SELECT c.relname, n.nspname,
        c.reltuples::bigint AS est_rows,
        pg_size_pretty(pg_total_relation_size(c.oid)) AS size
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE c.relkind IN ('r', 'p') AND n.nspname = $1
-ORDER BY c.relname`;
+WHERE c.relkind IN ('r', 'p')
+  AND n.nspname NOT LIKE 'pg\\_%' AND n.nspname <> 'information_schema'
+ORDER BY n.nspname, c.relname`;
 
 export const listColumns = `
 SELECT column_name, data_type, is_nullable, column_default,

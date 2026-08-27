@@ -20,6 +20,7 @@ export function createAuth(options: { allowSignUp?: boolean } = {}) {
     session: {
       expiresIn: 60 * 60 * 12,
       updateAge: 60 * 60,
+      cookieCache: { enabled: true, maxAge: 5 * 60 },
     },
     rateLimit: {
       enabled: true,
