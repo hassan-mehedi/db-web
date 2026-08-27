@@ -1,87 +1,67 @@
 "use client";
 
-import {
-  createColumnHelper,
-  createSortedRowModel,
-  rowSortingFeature,
-  sortFn_alphanumeric,
-  tableFeatures,
-  useTable,
-} from "@tanstack/react-table";
-import { useMemo } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { useState } from "react";
+import { updateRowAction } from "@/app/actions/data";
+import { FormError } from "@/components/form-error";
+import { Grid, type GridColumn } from "@/components/grid";
 import type { Cell } from "@/lib/format";
+import type { ResultSource } from "@/lib/run-query";
 
-const features = tableFeatures({
-  rowSortingFeature,
-  sortedRowModel: createSortedRowModel(),
-  sortFns: { alphanumeric: sortFn_alphanumeric },
-});
+interface Props {
+  database: string;
+  columns: string[];
+  rows: Cell[][];
+  source: ResultSource | null;
+}
 
-const helper = createColumnHelper<typeof features, Cell[]>();
+export function ResultsGrid({ database, columns, rows: initial, source }: Props) {
+  const [rows, setRows] = useState(initial);
+  const [error, setError] = useState<string | null>(null);
 
-export function ResultsGrid({ columns, rows }: { columns: string[]; rows: Cell[][] }) {
-  const defs = useMemo(
-    () =>
-      helper.columns(
-        columns.map((name, i) =>
-          helper.accessor((row) => row[i] ?? undefined, {
-            id: `${i}-${name}`,
-            header: name,
-            sortFn: "alphanumeric",
-            sortUndefined: "last",
-          }),
-        ),
-      ),
-    [columns],
-  );
-  const table = useTable({ features, columns: defs, data: rows });
+  const defs: GridColumn[] = columns.map((name, i) => {
+    const attname = source?.columns[i] ?? null;
+    return {
+      name,
+      primaryKey: attname !== null && source?.primaryKey.includes(attname),
+      editable: attname !== null,
+    };
+  });
+
+  const onEdit = source
+    ? async (r: number, c: number, value: Cell) => {
+        const row = rows[r];
+        const attname = source.columns[c];
+        if (!row || !attname) return false;
+        const key = Object.fromEntries(
+          source.primaryKey.map((k) => [k, row[source.columns.indexOf(k)] ?? null]),
+        );
+        setError(null);
+        const res = await updateRowAction(
+          { database, schema: source.schema, table: source.table },
+          key,
+          { [attname]: value },
+        );
+        if (!res.ok) {
+          setError(res.error);
+          return false;
+        }
+        setRows((prev) =>
+          prev.map((x, i) => (i === r ? x.map((v, j) => (j === c ? value : v)) : x)),
+        );
+        return true;
+      }
+    : undefined;
 
   return (
-    <div className="h-full overflow-auto">
-      <Table>
-        <TableHeader className="sticky top-0 bg-background">
-          {table.getHeaderGroups().map((hg) => (
-            <TableRow key={hg.id}>
-              {hg.headers.map((h) => (
-                <TableHead
-                  key={h.id}
-                  className="cursor-pointer select-none whitespace-nowrap font-mono"
-                  onClick={h.column.getToggleSortingHandler()}
-                >
-                  <table.FlexRender header={h} />
-                  {{ asc: " ↑", desc: " ↓" }[h.column.getIsSorted() as string] ?? ""}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((r) => (
-            <TableRow key={r.id}>
-              {r.getAllCells().map((c) => {
-                const v = (c.getValue() as Cell | undefined) ?? null;
-                return (
-                  <TableCell
-                    key={c.id}
-                    className="max-w-xs truncate font-mono text-xs"
-                    title={v ?? ""}
-                  >
-                    {v === null ? <span className="text-muted-foreground">null</span> : v}
-                  </TableCell>
-                );
-              })}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div className="flex h-full min-h-0 flex-col gap-2 p-2">
+      <FormError error={error} mono />
+      <Grid
+        columns={defs}
+        rows={rows}
+        sortable
+        {...(onEdit ? { onEdit } : {})}
+        className="min-h-0 flex-1 rounded-none border-0 bg-transparent"
+      />
     </div>
   );
 }

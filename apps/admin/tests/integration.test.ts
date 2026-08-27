@@ -123,6 +123,20 @@ suite("cluster + schema + dml against a real Postgres", () => {
     expect(upd.rowCount).toBe(1);
   });
 
+  it("marks single-table results with a primary key as editable", async () => {
+    const out = await runQuery(DB, "select id, title as t, upper(title) from api.posts", 10);
+    expect(out.source).toEqual({
+      schema: "api",
+      table: "posts",
+      primaryKey: ["id"],
+      columns: ["id", "title", null],
+    });
+    const noKey = await runQuery(DB, "select title from api.posts", 10);
+    expect(noKey.source).toBeNull();
+    const expr = await runQuery(DB, "select 1 as one", 10);
+    expect(expr.source).toBeNull();
+  });
+
   it("pages by primary key and estimates the count", async () => {
     await withClient(DB, (c) =>
       c.query(`CREATE TABLE api.nums (id int PRIMARY KEY, v text);

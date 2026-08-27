@@ -1,9 +1,12 @@
 "use client";
 
+import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type KeyboardEvent, useState, useTransition } from "react";
-import { deleteRowsAction, insertRowAction, updateRowAction } from "@/app/actions/data";
+import { useState, useTransition } from "react";
+import { deleteRowsAction, updateRowAction } from "@/app/actions/data";
 import { FormError } from "@/components/form-error";
+import { Grid, type GridColumn } from "@/components/grid";
+import { InsertRowDialog } from "@/components/insert-row-dialog";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,16 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import type { Rel, RowKey } from "@/lib/dml";
 import type { Cell } from "@/lib/format";
 import type { ColumnRow } from "@/lib/queries";
@@ -39,8 +32,6 @@ interface Props {
 export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) {
   const router = useRouter();
   const editable = primaryKey.length > 0;
-  const [editing, setEditing] = useState<{ row: number; col: number } | null>(null);
-  const [draft, setDraft] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [inserting, setInserting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -50,34 +41,25 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
   const keyOf = (row: Cell[]): RowKey =>
     Object.fromEntries(primaryKey.map((k) => [k, row[columns.indexOf(k)] ?? null]));
 
-  function startEdit(r: number, c: number) {
-    if (!editable) return;
-    setEditing({ row: r, col: c });
-    setDraft(rows[r]?.[c] ?? "");
-  }
+  const defs: GridColumn[] = columns.map((name) => ({
+    name,
+    type: columnMeta.find((m) => m.column_name === name)?.data_type,
+    primaryKey: primaryKey.includes(name),
+    editable,
+  }));
 
-  function commit(asNull: boolean) {
-    if (!editing) return;
-    const row = rows[editing.row];
-    const col = columns[editing.col];
-    if (!row || !col) return;
-    const next: Cell = asNull ? null : draft;
-    if (next === row[editing.col]) {
-      setEditing(null);
-      return;
-    }
+  async function onEdit(r: number, c: number, value: Cell) {
+    const row = rows[r];
+    const col = columns[c];
+    if (!row || !col) return false;
     setError(null);
-    start(async () => {
-      const res = await updateRowAction(rel, keyOf(row), { [col]: next });
-      if (!res.ok) setError(res.error);
-      setEditing(null);
-      router.refresh();
-    });
-  }
-
-  function onKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") commit(false);
-    if (e.key === "Escape") setEditing(null);
+    const res = await updateRowAction(rel, keyOf(row), { [col]: value });
+    if (!res.ok) {
+      setError(res.error);
+      return false;
+    }
+    router.refresh();
+    return true;
   }
 
   function remove() {
@@ -85,8 +67,8 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
     start(async () => {
       const keys = [...selected]
         .map((i) => rows[i])
-        .filter(Boolean)
-        .map((r) => keyOf(r as Cell[]));
+        .filter((r): r is Cell[] => !!r)
+        .map(keyOf);
       const res = await deleteRowsAction(rel, keys);
       if (!res.ok) setError(res.error);
       else setSelected(new Set());
@@ -97,19 +79,21 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
 
   return (
     <div className="grid gap-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {editable ? (
           <>
-            <Button size="sm" variant="outline" onClick={() => setInserting(true)}>
+            <Button size="sm" onClick={() => setInserting(true)}>
+              <Plus />
               Insert row
             </Button>
             {selected.size > 0 && (
               <Button size="sm" variant="destructive" onClick={() => setConfirmDelete(true)}>
+                <Trash2 />
                 Delete {selected.size} row{selected.size === 1 ? "" : "s"}
               </Button>
             )}
             <span className="text-xs text-muted-foreground">
-              Click a cell to edit. Enter saves, Esc cancels.
+              Double-click or press Enter on a cell to edit. Backspace sets NULL.
             </span>
           </>
         ) : (
@@ -117,89 +101,20 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
             No primary key, so rows are read-only here. Use the SQL editor.
           </span>
         )}
-        <FormError error={error} />
       </div>
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {editable && <TableHead className="w-8" />}
-              {columns.map((c) => (
-                <TableHead key={c} className="font-mono">
-                  {c}
-                  {primaryKey.includes(c) && <span className="ml-1 text-muted-foreground">pk</span>}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row, r) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: page rows are positional
-              <TableRow key={r} data-state={selected.has(r) ? "selected" : undefined}>
-                {editable && (
-                  <TableCell>
-                    <input
-                      type="checkbox"
-                      aria-label="select row"
-                      checked={selected.has(r)}
-                      onChange={(e) => {
-                        const next = new Set(selected);
-                        if (e.target.checked) next.add(r);
-                        else next.delete(r);
-                        setSelected(next);
-                      }}
-                    />
-                  </TableCell>
-                )}
-                {row.map((cell, c) => {
-                  const isEditing = editing?.row === r && editing.col === c;
-                  return (
-                    <TableCell
-                      key={columns[c]}
-                      className={`max-w-xs font-mono text-xs ${isEditing ? "" : "truncate"} ${editable ? "cursor-text" : ""}`}
-                      title={cell ?? ""}
-                      onDoubleClick={() => startEdit(r, c)}
-                      onClick={() => !isEditing && startEdit(r, c)}
-                    >
-                      {isEditing ? (
-                        <div className="flex items-center gap-1">
-                          <Input
-                            autoFocus
-                            className="h-7 font-mono text-xs"
-                            value={draft}
-                            onChange={(e) => setDraft(e.target.value)}
-                            onKeyDown={onKey}
-                            onBlur={() => commit(false)}
-                            disabled={pending}
-                          />
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-xs"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => commit(true)}
-                          >
-                            null
-                          </Button>
-                        </div>
-                      ) : cell === null ? (
-                        <span className="text-muted-foreground">null</span>
-                      ) : (
-                        cell
-                      )}
-                    </TableCell>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <FormError error={error} mono />
+      <Grid
+        columns={defs}
+        rows={rows}
+        {...(editable ? { selected, onSelect: setSelected, onEdit } : {})}
+        className="max-h-[70vh]"
+      />
 
       {inserting && (
         <InsertRowDialog
           rel={rel}
           columns={columnMeta}
+          primaryKey={primaryKey}
           onClose={() => setInserting(false)}
           onDone={() => {
             setInserting(false);
@@ -221,10 +136,10 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
           <SqlPreview
             sql={[...selected]
               .map((i) => rows[i])
-              .filter(Boolean)
+              .filter((r): r is Cell[] => !!r)
               .map(
                 (r) =>
-                  `DELETE FROM ${rel.schema}.${rel.table} WHERE ${Object.entries(keyOf(r as Cell[]))
+                  `DELETE FROM ${rel.schema}.${rel.table} WHERE ${Object.entries(keyOf(r))
                     .map(([k, v]) => `${k} = ${v === null ? "NULL" : `'${v}'`}`)
                     .join(" AND ")};`,
               )
@@ -238,95 +153,5 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function InsertRowDialog({
-  rel,
-  columns,
-  onClose,
-  onDone,
-}: {
-  rel: Rel;
-  columns: ColumnRow[];
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const [values, setValues] = useState<
-    Record<string, { mode: "default" | "null" | "value"; text: string }>
-  >(Object.fromEntries(columns.map((c) => [c.column_name, { mode: "default", text: "" }])));
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  function submit() {
-    const payload: Record<string, Cell> = {};
-    for (const [col, v] of Object.entries(values)) {
-      if (v.mode === "null") payload[col] = null;
-      else if (v.mode === "value") payload[col] = v.text;
-    }
-    setError(null);
-    start(async () => {
-      const res = await insertRowAction(rel, payload);
-      if (!res.ok) setError(res.error);
-      else onDone();
-    });
-  }
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Insert row</DialogTitle>
-          <DialogDescription>Leave a field on "default" to let Postgres fill it.</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3">
-          {columns.map((c) => {
-            const v = values[c.column_name] ?? { mode: "default" as const, text: "" };
-            return (
-              <div key={c.column_name} className="grid grid-cols-[1fr_2fr_auto] items-center gap-2">
-                <Label className="font-mono text-xs">
-                  {c.column_name}
-                  <span className="block text-muted-foreground">{c.data_type}</span>
-                </Label>
-                <Input
-                  className="font-mono"
-                  value={v.text}
-                  disabled={v.mode !== "value"}
-                  onChange={(e) =>
-                    setValues({
-                      ...values,
-                      [c.column_name]: { mode: "value", text: e.target.value },
-                    })
-                  }
-                />
-                <select
-                  className="rounded border bg-background p-1 text-xs"
-                  value={v.mode}
-                  onChange={(e) =>
-                    setValues({
-                      ...values,
-                      [c.column_name]: {
-                        mode: e.target.value as "default" | "null" | "value",
-                        text: v.text,
-                      },
-                    })
-                  }
-                >
-                  <option value="default">default</option>
-                  <option value="null">null</option>
-                  <option value="value">value</option>
-                </select>
-              </div>
-            );
-          })}
-          <FormError error={error} />
-          <DialogFooter>
-            <Button onClick={submit} disabled={pending}>
-              {pending ? "Inserting…" : "Insert"}
-            </Button>
-          </DialogFooter>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }

@@ -10,6 +10,7 @@ import {
   Loader2,
   PanelRightClose,
   PanelRightOpen,
+  Pencil,
   Play,
   Save,
   Trash2,
@@ -28,6 +29,7 @@ import {
 } from "@/app/actions/query";
 import { deleteSavedQueryAction, saveQueryAction } from "@/app/actions/saved-queries";
 import { FormError } from "@/components/form-error";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -67,6 +69,7 @@ export function SqlEditor({
   const [text, setText] = useState(initial);
   const [explain, setExplain] = useState<ExplainResponse | null>(null);
   const [response, setResponse] = useState<QueryResponse | null>(null);
+  const [runId, setRunId] = useState(0);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [pane, setPane] = useState<"results" | "plan">("results");
   const [sideOpen, setSideOpen] = useState(true);
@@ -103,6 +106,7 @@ export function SqlEditor({
     setPane("results");
     start(async () => {
       setResponse(await executeQuery(database, query, nextLimit));
+      setRunId((n) => n + 1);
       router.refresh();
     });
   }
@@ -263,6 +267,12 @@ export function SqlEditor({
                     <TabsTrigger value="plan">Plan</TabsTrigger>
                   </TabsList>
                   <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                    {response?.ok && response.result.source && (
+                      <Badge variant="outline" className="font-mono text-[10px]">
+                        <Pencil />
+                        {response.result.source.schema}.{response.result.source.table}
+                      </Badge>
+                    )}
                     {status}
                     {response?.ok && response.result.truncated && (
                       <Button variant="link" size="xs" onClick={() => run(limit * 10)}>
@@ -279,7 +289,13 @@ export function SqlEditor({
                     </div>
                   )}
                   {response?.ok && response.result.columns.length > 0 && (
-                    <ResultsGrid columns={response.result.columns} rows={response.result.rows} />
+                    <ResultsGrid
+                      key={runId}
+                      database={database}
+                      columns={response.result.columns}
+                      rows={response.result.rows}
+                      source={response.result.source}
+                    />
                   )}
                   {response?.ok && response.result.columns.length === 0 && <Empty>{status}</Empty>}
                 </TabsContent>
