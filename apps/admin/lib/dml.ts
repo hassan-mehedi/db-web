@@ -40,6 +40,43 @@ export async function updateRow(rel: Rel, key: RowKey, changes: Record<string, C
   });
 }
 
+export interface RowChange {
+  key: RowKey;
+  values: Record<string, Cell>;
+}
+
+export function updateStatement(rel: Rel, change: RowChange) {
+  const cols = Object.entries(change.values);
+  if (cols.length === 0) throw new Error("nothing to update");
+  const set = cols.map(([c], i) => `${ident(c)} = $${i + 1}`).join(", ");
+  const where = whereKey(change.key, cols.length + 1);
+  return {
+    text: `UPDATE ${quoteQualified(rel.schema, rel.table)} SET ${set} WHERE ${where.text}`,
+    values: [...cols.map(([, v]) => v), ...where.values],
+  };
+}
+
+export async function updateRows(rel: Rel, changes: RowChange[]) {
+  if (changes.length === 0) throw new Error("nothing to update");
+  return withClient(rel.database, async (c) => {
+    await c.query("BEGIN");
+    try {
+      const statements: string[] = [];
+      for (const change of changes) {
+        const { text, values } = updateStatement(rel, change);
+        const r = await c.query(text, values);
+        if (r.rowCount !== 1) throw new Error(`expected 1 row, matched ${r.rowCount}`);
+        statements.push(text);
+      }
+      await c.query("COMMIT");
+      return statements.join(";\n");
+    } catch (err) {
+      await c.query("ROLLBACK");
+      throw err;
+    }
+  });
+}
+
 export async function insertRow(rel: Rel, values: Record<string, Cell>) {
   const cols = Object.entries(values);
   const text =

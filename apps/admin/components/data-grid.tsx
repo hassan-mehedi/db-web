@@ -2,11 +2,12 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { deleteRowsAction, updateRowAction } from "@/app/actions/data";
+import { useCallback, useState, useTransition } from "react";
+import { deleteRowsAction, updateRowsAction } from "@/app/actions/data";
 import { FormError } from "@/components/form-error";
 import { Grid, type GridColumn } from "@/components/grid";
 import { InsertRowDialog } from "@/components/insert-row-dialog";
+import { PendingChangesBar } from "@/components/pending-changes-bar";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,9 +18,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Rel, RowKey } from "@/lib/dml";
+import type { Rel, RowChange, RowKey } from "@/lib/dml";
 import type { Cell } from "@/lib/format";
 import type { ColumnRow } from "@/lib/queries";
+import { usePendingEdits } from "@/lib/use-pending-edits";
 
 interface Props {
   rel: Rel;
@@ -38,8 +40,15 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const keyOf = (row: Cell[]): RowKey =>
-    Object.fromEntries(primaryKey.map((k) => [k, row[columns.indexOf(k)] ?? null]));
+  const keyOf = useCallback(
+    (row: Cell[]): RowKey =>
+      Object.fromEntries(primaryKey.map((k) => [k, row[columns.indexOf(k)] ?? null])),
+    [primaryKey, columns],
+  );
+  const columnName = useCallback((c: number) => columns[c] ?? null, [columns]);
+  const apply = useCallback((changes: RowChange[]) => updateRowsAction(rel, changes), [rel]);
+  const onSaved = useCallback(() => router.refresh(), [router]);
+  const edits = usePendingEdits({ rel, rows, columnName, keyOf, apply, onSaved });
 
   const defs: GridColumn[] = columns.map((name) => ({
     name,
@@ -47,20 +56,6 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
     primaryKey: primaryKey.includes(name),
     editable,
   }));
-
-  async function onEdit(r: number, c: number, value: Cell) {
-    const row = rows[r];
-    const col = columns[c];
-    if (!row || !col) return false;
-    setError(null);
-    const res = await updateRowAction(rel, keyOf(row), { [col]: value });
-    if (!res.ok) {
-      setError(res.error);
-      return false;
-    }
-    router.refresh();
-    return true;
-  }
 
   function remove() {
     setError(null);
@@ -93,7 +88,8 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
               </Button>
             )}
             <span className="text-xs text-muted-foreground">
-              Double-click or press Enter on a cell to edit. Backspace sets NULL.
+              Double-click or press Enter on a cell to edit. Backspace sets NULL. Changes wait until
+              you save.
             </span>
           </>
         ) : (
@@ -103,10 +99,20 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
         )}
       </div>
       <FormError error={error} mono />
+      <PendingChangesBar
+        count={edits.edits.size}
+        sql={edits.sql}
+        pending={edits.pending}
+        error={edits.error}
+        onSave={edits.save}
+        onDiscard={edits.discard}
+      />
       <Grid
         columns={defs}
         rows={rows}
-        {...(editable ? { selected, onSelect: setSelected, onEdit } : {})}
+        {...(editable
+          ? { selected, onSelect: setSelected, edits: edits.edits, onEdit: edits.edit }
+          : {})}
         className="max-h-[70vh]"
       />
 

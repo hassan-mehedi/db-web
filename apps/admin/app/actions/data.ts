@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/app/actions/cluster";
 import { audit } from "@/lib/audit";
-import { deleteRows, insertRow, type Rel, type RowKey, updateRow } from "@/lib/dml";
+import {
+  deleteRows,
+  insertRow,
+  type Rel,
+  type RowChange,
+  type RowKey,
+  updateRow,
+  updateRows,
+} from "@/lib/dml";
 import type { Cell } from "@/lib/format";
 import { tablePath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
@@ -25,6 +33,18 @@ export async function updateRowAction(
   try {
     const sql = await updateRow(rel, key, changes);
     audit("update-row", rel.database, sql);
+    revalidatePath(path(rel));
+    return { ok: true, sql };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function updateRowsAction(rel: Rel, changes: RowChange[]): Promise<ActionResult> {
+  await requireSession();
+  try {
+    const sql = await updateRows(rel, changes);
+    audit("update-rows", rel.database, sql);
     revalidatePath(path(rel));
     return { ok: true, sql };
   } catch (err) {

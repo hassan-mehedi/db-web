@@ -2,7 +2,7 @@ import { closePool, maintenancePool, poolFor, withClient } from "@db-web/db";
 import { alterColumns, createTable, databaseAccess } from "@db-web/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDatabase, dropDatabase, planCreateDatabase } from "../lib/cluster";
-import { deleteRows, insertRow, updateRow } from "../lib/dml";
+import { deleteRows, insertRow, updateRow, updateRows } from "../lib/dml";
 import { getTableData } from "../lib/queries";
 import { runQuery } from "../lib/run-query";
 
@@ -121,6 +121,36 @@ suite("cluster + schema + dml against a real Postgres", () => {
     const upd = await runQuery(DB, "insert into api.posts (title) values ('x')", 100);
     expect(upd.command).toBe("INSERT");
     expect(upd.rowCount).toBe(1);
+  });
+
+  it("applies several row changes in one transaction and rolls back on a miss", async () => {
+    const rel = { database: DB, schema: "api", table: "posts" };
+    const ids = await withClient(DB, (c) =>
+      c.query<{ id: number }>("INSERT INTO api.posts (title) VALUES ('p'), ('q') RETURNING id"),
+    );
+    const [a, b] = ids.rows.map((r) => String(r.id));
+    const sql = await updateRows(rel, [
+      { key: { id: a as string }, values: { title: "first" } },
+      { key: { id: b as string }, values: { title: "second", views: "7" } },
+    ]);
+    expect(sql).toContain('UPDATE "api"."posts" SET "title" = $1, "views" = $2 WHERE "id" = $3');
+    const after = await withClient(DB, (c) =>
+      c.query("SELECT title, views FROM api.posts WHERE id = ANY($1::int[]) ORDER BY id", [[a, b]]),
+    );
+    expect(after.rows).toEqual([
+      { title: "first", views: 0 },
+      { title: "second", views: 7 },
+    ]);
+    await expect(
+      updateRows(rel, [
+        { key: { id: a as string }, values: { title: "x" } },
+        { key: { id: "999999" }, values: { title: "y" } },
+      ]),
+    ).rejects.toThrow("matched 0");
+    const still = await withClient(DB, (c) =>
+      c.query("SELECT title FROM api.posts WHERE id = $1", [a]),
+    );
+    expect(still.rows[0]).toEqual({ title: "first" });
   });
 
   it("marks single-table results with a primary key as editable", async () => {

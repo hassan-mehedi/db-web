@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, KeyRound } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Cell } from "@/lib/format";
+import { editKey, type PendingEdits } from "@/lib/pending-edits";
 import { cn } from "@/lib/utils";
 
 export interface GridColumn {
@@ -19,7 +20,8 @@ interface Props {
   sortable?: boolean;
   selected?: Set<number>;
   onSelect?: (next: Set<number>) => void;
-  onEdit?: (row: number, col: number, value: Cell) => Promise<boolean>;
+  edits?: PendingEdits;
+  onEdit?: (row: number, col: number, value: Cell) => void;
   emptyText?: string;
   className?: string;
 }
@@ -34,6 +36,7 @@ export function Grid({
   sortable = false,
   selected,
   onSelect,
+  edits,
   onEdit,
   emptyText = "No rows",
   className,
@@ -42,8 +45,12 @@ export function Grid({
   const [active, setActive] = useState<{ row: number; col: number } | null>(null);
   const [editing, setEditing] = useState<{ row: number; col: number } | null>(null);
   const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
   const tableRef = useRef<HTMLTableElement>(null);
+
+  const valueAt = (row: number, col: number): Cell =>
+    edits?.has(editKey(row, col))
+      ? (edits.get(editKey(row, col)) ?? null)
+      : (rows[row]?.[col] ?? null);
 
   const order = useMemo(() => {
     const idx = rows.map((_, i) => i);
@@ -87,21 +94,15 @@ export function Grid({
   function startEdit(row: number, col: number, seed?: string) {
     if (!onEdit || !columns[col]?.editable) return;
     setEditing({ row, col });
-    setDraft(seed ?? rows[row]?.[col] ?? "");
+    setDraft(seed ?? valueAt(row, col) ?? "");
   }
 
-  async function commit(value: Cell) {
+  function commit(value: Cell) {
     if (!editing || !onEdit) return;
-    const current = rows[editing.row]?.[editing.col] ?? null;
     const target = editing;
     setEditing(null);
-    if (value === current) return;
-    setBusy(true);
-    try {
-      await onEdit(target.row, target.col, value);
-    } finally {
-      setBusy(false);
-    }
+    if (value === valueAt(target.row, target.col)) return;
+    onEdit(target.row, target.col, value);
   }
 
   function onCellKey(e: KeyboardEvent<HTMLTableCellElement>, row: number, col: number) {
@@ -122,8 +123,7 @@ export function Grid({
       startEdit(row, col);
     } else if ((e.key === "Backspace" || e.key === "Delete") && columns[col]?.editable && onEdit) {
       e.preventDefault();
-      setEditing({ row, col });
-      void commit(null);
+      if (valueAt(row, col) !== null) onEdit(row, col, null);
     } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       startEdit(row, col, e.key);
@@ -133,16 +133,15 @@ export function Grid({
   function onInputKey(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();
-      void commit(draft);
+      commit(draft);
     } else if (e.key === "Escape") {
       e.preventDefault();
       setEditing(null);
     } else if (e.key === "Tab") {
       e.preventDefault();
       const pos = editing;
-      void commit(draft).then(() => {
-        if (pos) setActive({ row: pos.row, col: Math.min(columns.length - 1, pos.col + 1) });
-      });
+      commit(draft);
+      if (pos) setActive({ row: pos.row, col: Math.min(columns.length - 1, pos.col + 1) });
     }
   }
 
@@ -157,10 +156,7 @@ export function Grid({
 
   return (
     <div className={cn("relative overflow-auto rounded-md border bg-card", className)}>
-      <table
-        ref={tableRef}
-        className={cn("w-max min-w-full border-separate border-spacing-0", busy && "opacity-70")}
-      >
+      <table ref={tableRef} className="w-max min-w-full border-separate border-spacing-0">
         <thead className="sticky top-0 z-10">
           <tr>
             <th className="w-10 border-r border-b bg-muted/80 px-2 text-center backdrop-blur">
@@ -229,8 +225,10 @@ export function Grid({
                     n + 1
                   )}
                 </td>
-                {row.map((cell, c) => {
+                {row.map((_, c) => {
                   const column = columns[c];
+                  const changed = edits?.has(editKey(r, c)) ?? false;
+                  const cell = valueAt(r, c);
                   const isEditing = editing?.row === r && editing.col === c;
                   const isActive = active?.row === r && active.col === c;
                   const editable = !!onEdit && !!column?.editable;
@@ -247,6 +245,7 @@ export function Grid({
                         "outline-none",
                         isActive && !isEditing && "ring-2 ring-primary ring-inset",
                         isEditing && "p-0",
+                        changed && "bg-amber-500/15 text-amber-700 dark:text-amber-300",
                         editable && "cursor-cell",
                         !editable && onEdit && "text-muted-foreground",
                       )}
@@ -263,13 +262,13 @@ export function Grid({
                             value={draft}
                             onChange={(e) => setDraft(e.target.value)}
                             onKeyDown={onInputKey}
-                            onBlur={() => void commit(draft)}
+                            onBlur={() => commit(draft)}
                           />
                           <button
                             type="button"
                             className="border-l bg-background px-2 font-mono text-[10px] text-muted-foreground hover:text-foreground"
                             onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => void commit(null)}
+                            onClick={() => commit(null)}
                           >
                             NULL
                           </button>
