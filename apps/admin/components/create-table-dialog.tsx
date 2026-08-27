@@ -6,6 +6,7 @@ import { useMemo, useState, useTransition } from "react";
 import { createTableAction } from "@/app/actions/schema";
 import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
+import { TypeInput } from "@/components/type-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -137,17 +138,17 @@ export function CreateTableDialog({ database, schemas }: { database: string; sch
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional
                   key={i}
-                  className="grid grid-cols-[1fr_1.5fr_1fr_auto_auto_auto] items-center gap-2"
+                  className="grid grid-cols-[1fr_1.5fr_1fr_auto_auto_auto] items-start gap-2"
                 >
                   <Input
                     className="font-mono"
                     value={r.name}
                     onChange={(e) => update(i, { name: e.target.value.trim() })}
                   />
-                  <Input
-                    className="font-mono"
+                  <TypeInput
+                    database={database}
                     value={r.type}
-                    onChange={(e) => update(i, { type: e.target.value })}
+                    onChange={(type) => update(i, { type })}
                   />
                   <Input
                     className="font-mono"

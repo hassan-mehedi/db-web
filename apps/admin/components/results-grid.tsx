@@ -45,7 +45,7 @@ export function ResultsGrid({ columns, rows }: { columns: string[]; rows: Cell[]
   const table = useTable({ features, columns: defs, data: rows });
 
   return (
-    <div className="max-h-[60vh] overflow-auto rounded border">
+    <div className="h-full overflow-auto">
       <Table>
         <TableHeader className="sticky top-0 bg-background">
           {table.getHeaderGroups().map((hg) => (

@@ -1,5 +1,7 @@
-import { maintenancePool, withClient } from "@db-web/db";
+import { maintenancePool, poolFor, withClient } from "@db-web/db";
 import {
+  completionSchema,
+  databaseAccess,
   databaseSizes,
   listAllTables,
   listColumns,
@@ -242,4 +244,36 @@ function totalOf(n: string | undefined, exact: boolean | undefined): number | nu
   const v = Number(n ?? -1);
   if (exact) return Math.max(0, v);
   return v < 0 ? null : v;
+}
+
+export interface DatabaseAccess {
+  owner: string;
+  user: string;
+  canCreateInPublic: boolean;
+}
+
+export function getDatabaseAccess(database: string): Promise<DatabaseAccess> {
+  return timed("access", async () => {
+    const { rows } = await poolFor(database).query<DatabaseAccess>(databaseAccess);
+    return rows[0] ?? { owner: "?", user: "?", canCreateInPublic: false };
+  });
+}
+
+export type CompletionSchema = Record<string, Record<string, string[]>>;
+
+export function getCompletionSchema(database: string): Promise<CompletionSchema> {
+  return timed("completion", async () => {
+    const { rows } = await poolFor(database).query<{
+      schema: string;
+      table: string;
+      columns: string[];
+    }>(completionSchema);
+    const out: CompletionSchema = {};
+    for (const r of rows) {
+      const tables = out[r.schema] ?? {};
+      tables[r.table] = r.columns;
+      out[r.schema] = tables;
+    }
+    return out;
+  });
 }

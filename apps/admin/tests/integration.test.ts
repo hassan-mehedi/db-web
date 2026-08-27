@@ -1,5 +1,5 @@
-import { closePool, maintenancePool, withClient } from "@db-web/db";
-import { alterColumns, createTable } from "@db-web/sql";
+import { closePool, maintenancePool, poolFor, withClient } from "@db-web/db";
+import { alterColumns, createTable, databaseAccess } from "@db-web/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDatabase, dropDatabase, planCreateDatabase } from "../lib/cluster";
 import { deleteRows, insertRow, updateRow } from "../lib/dml";
@@ -48,6 +48,11 @@ suite("cluster + schema + dml against a real Postgres", () => {
     expect(schema.rowCount).toBe(1);
   });
 
+  it("reports that the app role can create tables in a database it created", async () => {
+    const { rows } = await poolFor(DB).query(databaseAccess);
+    expect(rows[0].owner).toBe(rows[0].user);
+    expect(rows[0].canCreateInPublic).toBe(true);
+  });
   it("refuses protected and invalid names", () => {
     expect(() => planCreateDatabase({ database: "postgres", bootstrap: false })).toThrow();
     expect(() => planCreateDatabase({ database: "db_web_meta", bootstrap: false })).toThrow();

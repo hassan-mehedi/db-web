@@ -2,6 +2,7 @@ import { AppShell } from "@/components/app-shell";
 import { SqlEditor } from "@/components/sql-editor";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
 import { envLabel } from "@/lib/projects";
+import { getCompletionSchema } from "@/lib/queries";
 import { listHistory } from "@/lib/query-history";
 import { envPath, projectPath } from "@/lib/routes";
 import { listSavedQueries } from "@/lib/saved-queries";
@@ -20,7 +21,11 @@ export default async function QueryPage({
   const { project, env } = await params;
   const database = resolveDatabase({ project, env });
   const initial = (await searchParams).explain ?? "";
-  const [saved, history] = await Promise.all([listSavedQueries(database), listHistory(database)]);
+  const [saved, history, completion] = await Promise.all([
+    listSavedQueries(database),
+    listHistory(database),
+    getCompletionSchema(database),
+  ]);
   return (
     <AppShell
       database={database}
@@ -29,8 +34,15 @@ export default async function QueryPage({
         { label: envLabel(env), href: envPath(database) },
         { label: "query" },
       ]}
+      wide
     >
-      <SqlEditor database={database} saved={saved} history={history} initial={initial} />
+      <SqlEditor
+        database={database}
+        saved={saved}
+        history={history}
+        completion={completion}
+        initial={initial}
+      />
     </AppShell>
   );
 }

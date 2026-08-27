@@ -2,10 +2,11 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { CreateTableDialog } from "@/components/create-table-dialog";
 import { EnvBadge } from "@/components/env-badge";
+import { OwnershipAlert } from "@/components/ownership-alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
 import { envLabel } from "@/lib/projects";
-import { getDatabases, getSchemasWithTables } from "@/lib/queries";
+import { getDatabaseAccess, getDatabases, getSchemasWithTables } from "@/lib/queries";
 import { projectPath, tablePath, tablesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 
@@ -15,7 +16,11 @@ export default async function EnvOverview({ params }: { params: Promise<EnvParam
   await requireSession();
   const { project, env } = await params;
   const database = resolveDatabase({ project, env });
-  const [schemas, databases] = await Promise.all([getSchemasWithTables(database), getDatabases()]);
+  const [schemas, databases, access] = await Promise.all([
+    getSchemasWithTables(database),
+    getDatabases(),
+    getDatabaseAccess(database),
+  ]);
   const row = databases.find((d) => d.datname === database);
   const tableCount = schemas.reduce((n, s) => n + s.tables.length, 0);
 
@@ -25,6 +30,7 @@ export default async function EnvOverview({ params }: { params: Promise<EnvParam
       crumbs={[{ label: project, href: projectPath(project) }, { label: envLabel(env) }]}
       actions={<CreateTableDialog database={database} schemas={schemas.map((s) => s.schema)} />}
     >
+      <OwnershipAlert database={database} access={access} />
       <div className="mb-6 flex items-center gap-3">
         <h1 className="font-mono text-xl font-semibold">{database}</h1>
         <EnvBadge database={database} />

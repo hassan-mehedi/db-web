@@ -89,3 +89,16 @@ JOIN pg_database d ON d.oid = s.dbid
 WHERE d.datname NOT IN ('postgres', 'db_web_meta')
 ORDER BY s.total_exec_time DESC
 LIMIT $1`;
+
+export const databaseAccess = `
+SELECT pg_get_userbyid(d.datdba) AS owner,
+       current_user AS "user",
+       has_schema_privilege('public', 'CREATE') AS "canCreateInPublic"
+FROM pg_database d WHERE d.datname = current_database()`;
+
+export const completionSchema = `
+SELECT table_schema AS schema, table_name AS "table",
+       array_agg(column_name::text ORDER BY ordinal_position) AS columns
+FROM information_schema.columns
+WHERE table_schema NOT LIKE 'pg\\_%' AND table_schema <> 'information_schema'
+GROUP BY 1, 2 ORDER BY 1, 2`;

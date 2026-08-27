@@ -6,6 +6,7 @@ import { useMemo, useState, useTransition } from "react";
 import { alterColumnsAction } from "@/app/actions/schema";
 import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
+import { TypeInput } from "@/components/type-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -182,11 +183,11 @@ export function ColumnEditor({ database, schema, table, columns }: Props) {
             </div>
             <div className="grid gap-1">
               <Label htmlFor="col-type">Type</Label>
-              <Input
+              <TypeInput
                 id="col-type"
-                className="font-mono"
+                database={database}
                 value={draft.type}
-                onChange={(e) => setDraft({ ...draft, type: e.target.value })}
+                onChange={(type) => setDraft({ ...draft, type })}
               />
             </div>
             <div className="grid gap-1">
@@ -233,6 +234,7 @@ export function ColumnEditor({ database, schema, table, columns }: Props) {
 
       {editing && (
         <EditColumnDialog
+          database={database}
           column={editing}
           onClose={() => setEditing(null)}
           onChange={(c) => {
@@ -267,10 +269,12 @@ export function ColumnEditor({ database, schema, table, columns }: Props) {
 }
 
 function EditColumnDialog({
+  database,
   column,
   onClose,
   onChange,
 }: {
+  database: string;
   column: ColumnRow;
   onClose: () => void;
   onChange: (c: ColumnChange) => void;
@@ -310,12 +314,12 @@ function EditColumnDialog({
           <div className="grid gap-1">
             <Label htmlFor="edit-type">Change type (current: {column.data_type})</Label>
             <div className="flex gap-2">
-              <Input
+              <TypeInput
                 id="edit-type"
-                className="font-mono"
+                database={database}
                 placeholder="bigint"
                 value={type}
-                onChange={(e) => setType(e.target.value)}
+                onChange={setType}
               />
               <Input
                 className="font-mono"

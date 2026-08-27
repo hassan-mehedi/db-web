@@ -7,6 +7,8 @@ import {
   type CreateTableInput,
   createTable,
   dropTable,
+  isValidType,
+  quoteIdent,
 } from "@db-web/sql";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/app/actions/cluster";
@@ -14,9 +16,16 @@ import { audit } from "@/lib/audit";
 import { tablePath, tablesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 
-function fail(err: unknown): { ok: false; error: string } {
-  return { ok: false, error: err instanceof Error ? err.message : String(err) };
+function fail(err: unknown, database?: string): { ok: false; error: string } {
+  let message = err instanceof Error ? err.message : String(err);
+  if (database && /permission denied for schema/.test(message)) {
+    message += `. The app role does not own ${database}. Run as a superuser: ALTER DATABASE ${quoteIdent(database)} OWNER TO ${quoteIdent(APP_ROLE)}`;
+  }
+  return { ok: false, error: message };
 }
+
+const APP_ROLE = new URL(process.env.DATABASE_URL_MAINTENANCE ?? "postgres://app_admin@x/x")
+  .username;
 
 async function runInTransaction(database: string, statements: string[]) {
   await withClient(database, async (c) => {
@@ -43,7 +52,7 @@ export async function createTableAction(
     revalidatePath(tablesPath(database));
     return { ok: true, sql };
   } catch (err) {
-    return fail(err);
+    return fail(err, database);
   }
 }
 
@@ -60,7 +69,7 @@ export async function dropTableAction(
     revalidatePath(tablesPath(database));
     return { ok: true, sql };
   } catch (err) {
-    return fail(err);
+    return fail(err, database);
   }
 }
 
@@ -80,6 +89,27 @@ export async function alterColumnsAction(
     revalidatePath(tablePath(database, schema, table));
     return { ok: true, sql };
   } catch (err) {
-    return fail(err);
+    return fail(err, database);
+  }
+}
+
+export async function checkColumnType(
+  database: string,
+  type: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireSession();
+  if (!isValidType(type)) return { ok: false, error: "unexpected characters in type" };
+  try {
+    await withClient(database, async (c) => {
+      await c.query("BEGIN");
+      try {
+        await c.query(`CREATE TEMP TABLE "__db_web_type_check" ("c" ${type.trim()})`);
+      } finally {
+        await c.query("ROLLBACK");
+      }
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
