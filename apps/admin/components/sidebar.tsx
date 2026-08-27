@@ -141,7 +141,7 @@ export function Sidebar({ projects, backupsUrl }: SidebarProps) {
 
   return (
     <>
-      <aside className="hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:block">
+      <aside className="hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:sticky md:top-0 md:block md:h-screen">
         {content}
       </aside>
       <div className="flex h-12 items-center gap-3 border-b bg-sidebar px-4 md:hidden">
