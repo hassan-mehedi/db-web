@@ -180,12 +180,13 @@ export async function getTableData(
           countPromise,
         ]);
         const rows = data.rows as unknown[][];
+        const empty = rows.length === 0 && page === 0;
         return {
           columns: data.fields.map((f) => f.name),
           rows: formatRows(rows.slice(0, PAGE_SIZE)),
           primaryKey: pk,
-          total: totalOf(count.rows[0]?.n, opts.exact),
-          estimated: !opts.exact,
+          total: empty ? 0 : totalOf(count.rows[0]?.n, opts.exact),
+          estimated: !opts.exact && !empty,
           hasNext: rows.length > PAGE_SIZE,
           hasPrev: page > 0,
           firstKey: null,
@@ -221,12 +222,13 @@ export async function getTableData(
       const keyOf = (row: unknown[]) => row.slice(width).map((v) => String(v));
       const first = rows[0];
       const last = rows.at(-1);
+      const empty = rows.length === 0 && !cursor;
       return {
         columns: data.fields.slice(0, width).map((f) => f.name),
         rows: formatRows(rows.map((r) => r.slice(0, width))),
         primaryKey: pk,
-        total: totalOf(count.rows[0]?.n, opts.exact),
-        estimated: !opts.exact,
+        total: empty ? 0 : totalOf(count.rows[0]?.n, opts.exact),
+        estimated: !opts.exact && !empty,
         hasNext: backwards ? true : more,
         hasPrev: backwards ? more : !!opts.after,
         firstKey: first ? keyOf(first) : null,
