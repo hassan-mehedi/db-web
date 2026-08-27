@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,7 +43,7 @@ export function ConfirmSqlButton({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <SqlPreview sql={sql} />
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        <FormError error={error} />
         <DialogFooter>
           <Button
             variant={destructive ? "destructive" : "default"}

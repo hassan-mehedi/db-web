@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
+import { AppSidebar } from "@/components/sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { groupByProject } from "@/lib/projects";
 import { getDatabaseNames } from "@/lib/queries";
 import { requireSession } from "@/lib/session";
-import { Sidebar } from "./sidebar";
 
 export async function ShellLayout({ children }: { children: ReactNode }) {
   await requireSession();
@@ -13,9 +14,9 @@ export async function ShellLayout({ children }: { children: ReactNode }) {
   }));
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <Sidebar projects={projects} backupsUrl={process.env.BACKUPS_URL} />
-      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
-    </div>
+    <SidebarProvider>
+      <AppSidebar projects={projects} backupsUrl={process.env.BACKUPS_URL} />
+      <SidebarInset className="min-w-0">{children}</SidebarInset>
+    </SidebarProvider>
   );
 }

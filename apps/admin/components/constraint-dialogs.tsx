@@ -18,6 +18,7 @@ import {
   dropConstraintAction,
 } from "@/app/actions/constraints";
 import { ConfirmSqlButton } from "@/components/confirm-sql-button";
+import { FormError } from "@/components/form-error";
 import { ColumnPicker } from "@/components/index-dialogs";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
@@ -206,7 +207,7 @@ export function AddConstraintDialog({
             </div>
           )}
           {built && <SqlPreview sql={built.sql} />}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <FormError error={error} />
           <DialogFooter>
             <Button
               disabled={!built || pending}

@@ -4,6 +4,7 @@ import { isProdDatabase } from "@db-web/bootstrap";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { dropDatabaseAction } from "@/app/actions/cluster";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -85,7 +86,7 @@ export function DropDatabaseDialog({ database }: { database: string }) {
             <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
             Terminate open connections first
           </label>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <FormError error={error} />
           <DialogFooter>
             <Button variant="destructive" onClick={drop} disabled={!confirmed || pending}>
               {pending ? "Dropping…" : "Drop"}

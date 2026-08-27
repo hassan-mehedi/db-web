@@ -13,8 +13,11 @@ import {
   type QueryResponse,
 } from "@/app/actions/query";
 import { deleteSavedQueryAction, saveQueryAction } from "@/app/actions/saved-queries";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { HistoryEntry } from "@/lib/query-history";
 import type { SavedQuery } from "@/lib/saved-queries";
 import { cn } from "@/lib/utils";
@@ -35,7 +38,6 @@ export function SqlEditor({
 }) {
   const router = useRouter();
   const [text, setText] = useState(initial);
-  const [side, setSide] = useState<"saved" | "history">("saved");
   const [explain, setExplain] = useState<ExplainResponse | null>(null);
   const [confirmAnalyze, setConfirmAnalyze] = useState(false);
   const [saveName, setSaveName] = useState("");
@@ -135,15 +137,15 @@ export function SqlEditor({
               Explain analyze
             </Button>
           )}
-          <span className="text-xs text-muted-foreground">
-            Ctrl/Cmd+Enter. Runs the selection if there is one. Rows capped at {limit}.
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <KbdGroup>
+              <Kbd>⌘</Kbd>
+              <Kbd>Enter</Kbd>
+            </KbdGroup>
+            runs the selection if there is one. Rows capped at {limit}.
           </span>
         </div>
-        {explain && !explain.ok && (
-          <pre className="whitespace-pre-wrap rounded border border-destructive/40 bg-destructive/10 p-3 font-mono text-xs text-destructive">
-            {explain.error}
-          </pre>
-        )}
+        {explain && !explain.ok && <FormError error={explain.error} mono />}
         {explain?.ok && (
           <div className="grid gap-1">
             <div className="text-xs text-muted-foreground">plan in {explain.durationMs} ms</div>
@@ -152,11 +154,7 @@ export function SqlEditor({
             </pre>
           </div>
         )}
-        {response && !response.ok && (
-          <pre className="whitespace-pre-wrap rounded border border-destructive/40 bg-destructive/10 p-3 font-mono text-xs text-destructive">
-            {response.error}
-          </pre>
-        )}
+        {response && !response.ok && <FormError error={response.error} mono />}
         {response?.ok && (
           <>
             <div className="text-xs text-muted-foreground">
@@ -180,70 +178,57 @@ export function SqlEditor({
           </>
         )}
       </div>
-      <aside className="grid content-start gap-3 text-sm">
-        <div className="flex gap-1 border-b text-xs">
-          {(["saved", "history"] as const).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setSide(k)}
-              className={cn(
-                "px-2 py-1.5",
-                side === k
-                  ? "-mb-px border-b-2 border-primary text-primary"
-                  : "text-muted-foreground",
-              )}
-            >
-              {k === "saved" ? `Saved (${saved.length})` : `History (${history.length})`}
-            </button>
-          ))}
-        </div>
-        {side === "history" && (
-          <ul className="grid gap-1">
-            {history.map((h) => (
-              <li key={h.id}>
-                <button
-                  type="button"
-                  className="w-full rounded px-2 py-1 text-left hover:bg-muted"
-                  title={h.sql}
-                  onClick={() => setText(h.sql)}
-                >
-                  <div className="truncate font-mono text-xs">{h.sql}</div>
-                  <div
-                    className={cn(
-                      "text-[10px]",
-                      h.error ? "text-destructive" : "text-muted-foreground",
-                    )}
+      <aside className="text-sm">
+        <Tabs defaultValue="saved">
+          <TabsList variant="line" className="w-full">
+            <TabsTrigger value="saved">Saved ({saved.length})</TabsTrigger>
+            <TabsTrigger value="history">History ({history.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="history">
+            <ul className="grid gap-1">
+              {history.map((h) => (
+                <li key={h.id}>
+                  <button
+                    type="button"
+                    className="w-full rounded px-2 py-1 text-left hover:bg-muted"
+                    title={h.sql}
+                    onClick={() => setText(h.sql)}
                   >
-                    {h.ran_at.slice(5, 16).replace("T", " ")} · {h.duration_ms} ms
-                    {h.error ? " · failed" : h.row_count !== null ? ` · ${h.row_count} rows` : ""}
-                  </div>
-                </button>
-              </li>
-            ))}
-            {history.length === 0 && (
-              <li className="px-2 text-xs text-muted-foreground">Nothing run yet.</li>
-            )}
-            {history.length > 0 && (
-              <li>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() =>
-                    start(async () => {
-                      await clearHistoryAction(database);
-                      router.refresh();
-                    })
-                  }
-                >
-                  Clear history
-                </Button>
-              </li>
-            )}
-          </ul>
-        )}
-        {side === "saved" && (
-          <>
+                    <div className="truncate font-mono text-xs">{h.sql}</div>
+                    <div
+                      className={cn(
+                        "text-[10px]",
+                        h.error ? "text-destructive" : "text-muted-foreground",
+                      )}
+                    >
+                      {h.ran_at.slice(5, 16).replace("T", " ")} · {h.duration_ms} ms
+                      {h.error ? " · failed" : h.row_count !== null ? ` · ${h.row_count} rows` : ""}
+                    </div>
+                  </button>
+                </li>
+              ))}
+              {history.length === 0 && (
+                <li className="px-2 text-xs text-muted-foreground">Nothing run yet.</li>
+              )}
+              {history.length > 0 && (
+                <li>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() =>
+                      start(async () => {
+                        await clearHistoryAction(database);
+                        router.refresh();
+                      })
+                    }
+                  >
+                    Clear history
+                  </Button>
+                </li>
+              )}
+            </ul>
+          </TabsContent>
+          <TabsContent value="saved" className="grid gap-3">
             <div className="flex gap-1">
               <Input
                 placeholder="save as…"
@@ -294,8 +279,8 @@ export function SqlEditor({
                 <li className="px-2 text-xs text-muted-foreground">No saved queries.</li>
               )}
             </ul>
-          </>
-        )}
+          </TabsContent>
+        </Tabs>
       </aside>
     </div>
   );

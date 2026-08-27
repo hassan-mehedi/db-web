@@ -4,6 +4,7 @@ import { alterColumns, type ColumnChange, isSafeExpression, isValidType } from "
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { alterColumnsAction } from "@/app/actions/schema";
+import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -249,7 +250,7 @@ export function ColumnEditor({ database, schema, table, columns }: Props) {
           <div className="grid gap-3">
             <SqlPreview sql={sql} />
             <p className="text-xs text-muted-foreground">Runs in one transaction.</p>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <FormError error={error} />
             <DialogFooter>
               <Button variant="outline" onClick={() => setConfirming(false)} disabled={pending}>
                 Back

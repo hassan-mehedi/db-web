@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useState, useTransition } from "react";
 import { deleteRowsAction, insertRowAction, updateRowAction } from "@/app/actions/data";
+import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -116,7 +117,7 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
             No primary key, so rows are read-only here. Use the SQL editor.
           </span>
         )}
-        {error && <span className="text-xs text-destructive">{error}</span>}
+        <FormError error={error} />
       </div>
       <div className="overflow-x-auto">
         <Table>
@@ -318,7 +319,7 @@ function InsertRowDialog({
               </div>
             );
           })}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <FormError error={error} />
           <DialogFooter>
             <Button onClick={submit} disabled={pending}>
               {pending ? "Inserting…" : "Insert"}

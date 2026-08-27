@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { sampleNowAction, terminateBackendAction } from "@/app/actions/monitoring";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -52,7 +53,7 @@ export function ActivityTable({ database, rows }: { database: string; rows: Acti
           Refresh
         </Button>
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      <FormError error={error} />
       <Table>
         <TableHeader>
           <TableRow>

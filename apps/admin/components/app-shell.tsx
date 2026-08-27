@@ -1,5 +1,16 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Separator } from "@/components/ui/separator";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { logRender } from "@/lib/timing";
 
 export interface Crumb {
@@ -22,37 +33,55 @@ export function AppShell({
   const timing = logRender(`/${crumbs.map((c) => c.label).join("/")}`);
   return (
     <>
-      <header className="flex h-12 items-center gap-2 border-b px-6 text-sm">
-        <nav className="flex min-w-0 items-center gap-2 overflow-hidden">
-          <Link href="/projects" className="text-muted-foreground hover:text-foreground">
-            Projects
-          </Link>
-          {crumbs.map((c) => (
-            <span key={`${c.label}-${c.href ?? ""}`} className="flex items-center gap-2">
-              <span className="text-muted-foreground/60">/</span>
-              {c.href ? (
-                <Link href={c.href} className="truncate font-mono hover:text-primary">
-                  {c.label}
-                </Link>
-              ) : (
-                <span className="truncate font-mono">{c.label}</span>
-              )}
-            </span>
-          ))}
-        </nav>
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4 text-sm">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-1 h-4! self-center" />
+        <Breadcrumb className="min-w-0 overflow-hidden">
+          <BreadcrumbList className="flex-nowrap">
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link href="/projects">Projects</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            {crumbs.map((c, i) => (
+              <Fragment key={`${c.label}-${c.href ?? ""}`}>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem className="min-w-0 font-mono">
+                  {c.href && i < crumbs.length - 1 ? (
+                    <BreadcrumbLink asChild className="truncate">
+                      <Link href={c.href}>{c.label}</Link>
+                    </BreadcrumbLink>
+                  ) : (
+                    <BreadcrumbPage className="truncate">{c.label}</BreadcrumbPage>
+                  )}
+                </BreadcrumbItem>
+              </Fragment>
+            ))}
+          </BreadcrumbList>
+        </Breadcrumb>
         <div className="ml-auto flex items-center gap-3">
           {actions}
-          <span
-            className="font-mono text-[10px] text-muted-foreground/60"
-            title={timing.entries.map((e) => `${e.label} ${e.ms} ms`).join("\n") || "no queries"}
-          >
-            {timing.total} ms
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="font-mono text-[10px] text-muted-foreground/60">
+                {timing.total} ms
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="font-mono text-xs">
+              {timing.entries.length === 0
+                ? "no queries"
+                : timing.entries.map((e) => (
+                    <div key={e.label}>
+                      {e.label} {e.ms} ms
+                    </div>
+                  ))}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </header>
-      <main className={wide ? "flex min-h-0 flex-1 flex-col" : "mx-auto w-full max-w-6xl p-6"}>
+      <div className={wide ? "flex min-h-0 flex-1 flex-col" : "mx-auto w-full max-w-6xl p-6"}>
         {children}
-      </main>
+      </div>
     </>
   );
 }

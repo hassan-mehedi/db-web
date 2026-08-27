@@ -9,6 +9,7 @@ import {
   grantRoleAction,
   revokeRoleAction,
 } from "@/app/actions/cluster";
+import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -145,7 +146,7 @@ export function CreateRoleDialog() {
               CREATEROLE
             </label>
             {valid && <SqlPreview sql={sql.replace(/PASSWORD '.*'/, "PASSWORD '…'")} />}
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <FormError error={error} />
             <DialogFooter>
               <Button
                 disabled={!valid || pending}
@@ -207,7 +208,7 @@ export function GrantRoleDialog({ to, roles }: { to: string; roles: string[] }) 
               ))}
           </select>
           {role && <SqlPreview sql={`GRANT "${role}" TO "${to}"`} />}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <FormError error={error} />
           <DialogFooter>
             <Button
               disabled={!role || pending}
@@ -274,7 +275,7 @@ export function DropRoleDialog({ name }: { name: string }) {
               autoComplete="off"
             />
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <FormError error={error} />
           <DialogFooter>
             <Button
               variant="destructive"

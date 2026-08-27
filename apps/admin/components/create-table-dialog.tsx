@@ -4,6 +4,7 @@ import { type ColumnSpec, createTable, isSafeExpression, isValidType } from "@db
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { createTableAction } from "@/app/actions/schema";
+import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -198,7 +199,7 @@ export function CreateTableDialog({ database, schemas }: { database: string; sch
         ) : (
           <div className="grid gap-4">
             <SqlPreview sql={sql} />
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <FormError error={error} />
             <DialogFooter>
               <Button variant="outline" onClick={() => setStep("form")} disabled={pending}>
                 Back

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { resetAuthenticatorPasswordAction } from "@/app/actions/roles";
 import { CopyButton } from "@/components/copy-button";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -126,7 +127,7 @@ function ResetPasswordDialog({
             this database stops connecting until you update its env.
           </DialogDescription>
         </DialogHeader>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        <FormError error={error} />
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
             Cancel

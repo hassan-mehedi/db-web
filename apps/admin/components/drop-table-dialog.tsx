@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { dropTableAction } from "@/app/actions/schema";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -69,7 +70,7 @@ export function DropTableDialog({
               autoComplete="off"
             />
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <FormError error={error} />
           <DialogFooter>
             <Button variant="destructive" disabled={typed !== table || pending} onClick={drop}>
               {pending ? "Dropping…" : "Drop"}

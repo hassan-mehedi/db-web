@@ -9,6 +9,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { createDatabaseAction } from "@/app/actions/cluster";
+import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -159,7 +160,7 @@ export function CreateDatabaseDialog({
         {step === "preview" && (
           <div className="grid gap-4">
             <SqlPreview sql={sql} />
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <FormError error={error} />
             <DialogFooter>
               <Button variant="outline" onClick={() => setStep("form")} disabled={pending}>
                 Back

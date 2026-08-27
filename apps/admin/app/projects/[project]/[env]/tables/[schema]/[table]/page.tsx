@@ -5,7 +5,13 @@ import { DataGrid } from "@/components/data-grid";
 import { DropTableDialog } from "@/components/drop-table-dialog";
 import { CreateIndexDialog, DropIndexButton } from "@/components/index-dialogs";
 import { TablesLayout } from "@/components/tables-layout";
-import { Button } from "@/components/ui/button";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import {
   Table,
   TableBody,
@@ -138,32 +144,32 @@ export default async function TablePage({
                 </>
               )}
             </span>
-            <Button asChild size="sm" variant="outline" disabled={!data.hasPrev}>
-              <Link
-                href={
-                  data.primaryKey.length
-                    ? dataQuery({
-                        before: data.firstKey ? JSON.stringify(data.firstKey) : undefined,
-                      })
-                    : dataQuery({ page: String(Math.max(0, page - 1)) })
-                }
-                aria-disabled={!data.hasPrev}
-              >
-                Prev
-              </Link>
-            </Button>
-            <Button asChild size="sm" variant="outline" disabled={!data.hasNext}>
-              <Link
-                href={
-                  data.primaryKey.length
-                    ? dataQuery({ after: data.lastKey ? JSON.stringify(data.lastKey) : undefined })
-                    : dataQuery({ page: String(page + 1) })
-                }
-                aria-disabled={!data.hasNext}
-              >
-                Next
-              </Link>
-            </Button>
+            <Pagination className="mx-0 w-auto justify-end">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href={
+                      data.primaryKey.length && data.firstKey
+                        ? dataQuery({ before: JSON.stringify(data.firstKey) })
+                        : dataQuery({ page: String(Math.max(0, page - 1)) })
+                    }
+                    aria-disabled={!data.hasPrev}
+                    className={data.hasPrev ? undefined : "pointer-events-none opacity-50"}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    href={
+                      data.primaryKey.length && data.lastKey
+                        ? dataQuery({ after: JSON.stringify(data.lastKey) })
+                        : dataQuery({ page: String(page + 1) })
+                    }
+                    aria-disabled={!data.hasNext}
+                    className={data.hasNext ? undefined : "pointer-events-none opacity-50"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         </>
       )}

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -49,7 +50,7 @@ export function LoginForm() {
                 required
               />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <FormError error={error} />
             <Button type="submit" disabled={busy}>
               Sign in
             </Button>

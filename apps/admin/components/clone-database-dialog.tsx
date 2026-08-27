@@ -4,6 +4,7 @@ import { isProdDatabase, projectRoles } from "@db-web/bootstrap";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { cloneDatabaseAction, previewCloneAction } from "@/app/actions/cluster";
+import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -167,7 +168,7 @@ export function CloneDatabaseDialog({
               Create PostgREST roles for the new database and grant them on{" "}
               <code className="font-mono">api</code>
             </label>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <FormError error={error} />
             <DialogFooter>
               <Button onClick={toPreview} disabled={!valid || pending}>
                 {pending ? "Checking…" : "Preview SQL"}
@@ -210,7 +211,7 @@ export function CloneDatabaseDialog({
                 )}
               </div>
             )}
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            <FormError error={error} />
             <DialogFooter>
               <Button variant="outline" onClick={() => setStep("form")} disabled={pending}>
                 Back

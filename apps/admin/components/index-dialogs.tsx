@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { createIndexAction, dropIndexAction } from "@/app/actions/constraints";
 import { ConfirmSqlButton } from "@/components/confirm-sql-button";
+import { FormError } from "@/components/form-error";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -136,7 +137,7 @@ export function CreateIndexDialog({ rel, columns }: { rel: Rel; columns: string[
             </select>
           </div>
           {sql && <SqlPreview sql={sql} />}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          <FormError error={error} />
           <DialogFooter>
             <Button
               disabled={!sql || pending}
