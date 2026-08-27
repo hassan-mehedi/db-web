@@ -33,13 +33,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { ColumnRow, CompletionSchema } from "@/lib/queries";
+import type { ColumnRow, CompletionSchema, ForeignKeyRow } from "@/lib/queries";
 
 interface Props {
   database: string;
   schema: string;
   table: string;
   columns: ColumnRow[];
+  foreignKeys: ForeignKeyRow[];
   tables: CompletionSchema;
 }
 
@@ -75,7 +76,7 @@ function describe(c: ColumnChange): string {
   }
 }
 
-export function ColumnEditor({ database, schema, table, columns, tables }: Props) {
+export function ColumnEditor({ database, schema, table, columns, foreignKeys, tables }: Props) {
   const router = useRouter();
   const [changes, setChanges] = useState<ColumnChange[]>([]);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -284,8 +285,9 @@ export function ColumnEditor({ database, schema, table, columns, tables }: Props
           tables={tables}
           column={editing}
           onClose={() => setEditing(null)}
-          onChange={(c) => {
-            push(c);
+          foreignKey={foreignKeys.find((f) => f.column === editing.column_name)}
+          onSave={(cs) => {
+            setChanges((prev) => [...prev, ...cs]);
             setEditing(null);
           }}
         />
@@ -315,29 +317,62 @@ export function ColumnEditor({ database, schema, table, columns, tables }: Props
   );
 }
 
+function currentType(column: ColumnRow): string {
+  if (column.data_type === "character varying" && column.character_maximum_length) {
+    return `varchar(${column.character_maximum_length})`;
+  }
+  return column.data_type;
+}
+
 function EditColumnDialog({
   database,
   schema,
   tables,
   column,
+  foreignKey,
   onClose,
-  onChange,
+  onSave,
 }: {
   database: string;
   schema: string;
   tables: CompletionSchema;
   column: ColumnRow;
+  foreignKey: ForeignKeyRow | undefined;
   onClose: () => void;
-  onChange: (c: ColumnChange) => void;
+  onSave: (changes: ColumnChange[]) => void;
 }) {
   const name = column.column_name;
-  const [rename, setRename] = useState(name);
-  const [type, setType] = useState("");
+  const initial = {
+    name,
+    type: currentType(column),
+    nullable: column.is_nullable === "YES",
+    default: column.column_default ?? "",
+  };
+  const [form, setForm] = useState(initial);
   const [using, setUsing] = useState("");
-  const [def, setDef] = useState(column.column_default ?? "");
-  const [reference, setReference] = useState<ColumnReference>(() => firstReference(tables, schema));
-  const nullable = column.is_nullable === "YES";
+  const [reference, setReference] = useState<ColumnReference | null>(null);
   const hasTables = Object.values(tables).some((t) => Object.keys(t).length > 0);
+  const typeChanged = form.type.trim() !== initial.type;
+
+  const changes: ColumnChange[] = [];
+  if (typeChanged) {
+    changes.push({ kind: "type", column: name, type: form.type, ...(using ? { using } : {}) });
+  }
+  if (form.nullable !== initial.nullable) {
+    changes.push({ kind: "nullable", column: name, nullable: form.nullable });
+  }
+  if (form.default !== initial.default) {
+    changes.push({ kind: "default", column: name, default: form.default || null });
+  }
+  if (reference) changes.push({ kind: "reference", column: name, references: reference });
+  if (form.name !== name) changes.push({ kind: "rename", column: name, to: form.name });
+
+  const valid =
+    /^[a-z_][a-z0-9_]*$/.test(form.name) &&
+    isValidType(form.type) &&
+    !/\bgenerated\b/i.test(form.type) &&
+    (using === "" || isSafeExpression(using)) &&
+    (form.default === "" || isSafeExpression(form.default));
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -345,112 +380,95 @@ function EditColumnDialog({
         <DialogHeader>
           <DialogTitle>Edit {name}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 text-sm">
+        <div className="grid gap-3 text-sm">
           <div className="grid gap-1">
-            <Label htmlFor="edit-rename">Rename</Label>
-            <div className="flex gap-2">
-              <Input
-                id="edit-rename"
-                className="font-mono"
-                value={rename}
-                onChange={(e) => setRename(e.target.value.trim())}
-              />
-              <Button
-                variant="outline"
-                disabled={rename === name || !/^[a-z_][a-z0-9_]*$/.test(rename)}
-                onClick={() => onChange({ kind: "rename", column: name, to: rename })}
-              >
-                Queue
-              </Button>
-            </div>
+            <Label htmlFor="edit-name">Name</Label>
+            <Input
+              id="edit-name"
+              className="font-mono"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value.trim() })}
+            />
           </div>
           <div className="grid gap-1">
-            <Label htmlFor="edit-type">Change type (current: {column.data_type})</Label>
-            <div className="flex gap-2">
-              <TypeInput
-                id="edit-type"
-                database={database}
-                placeholder="bigint"
-                value={type}
-                onChange={setType}
-              />
+            <Label htmlFor="edit-type">Type</Label>
+            <TypeInput
+              id="edit-type"
+              database={database}
+              value={form.type}
+              onChange={(type) => setForm({ ...form, type })}
+            />
+          </div>
+          {typeChanged && (
+            <div className="grid gap-1">
+              <Label htmlFor="edit-using">Convert existing values with (optional)</Label>
               <Input
+                id="edit-using"
                 className="font-mono"
-                placeholder={`USING ${name}::bigint`}
+                placeholder={`${name}::${form.type.trim() || "bigint"}`}
                 value={using}
                 onChange={(e) => setUsing(e.target.value)}
               />
-              <Button
-                variant="outline"
-                disabled={
-                  !isValidType(type) ||
-                  /\bgenerated\b/i.test(type) ||
-                  (using !== "" && !isSafeExpression(using))
-                }
-                onClick={() =>
-                  onChange({ kind: "type", column: name, type, ...(using ? { using } : {}) })
-                }
-              >
-                Queue
-              </Button>
-            </div>
-          </div>
-          <div className="grid gap-1">
-            <Label htmlFor="edit-default">
-              Default (current: {column.column_default ?? "none"})
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                id="edit-default"
-                className="font-mono"
-                value={def}
-                onChange={(e) => setDef(e.target.value)}
-              />
-              <Button
-                variant="outline"
-                disabled={!isSafeExpression(def) || def === column.column_default}
-                onClick={() => onChange({ kind: "default", column: name, default: def })}
-              >
-                Set
-              </Button>
-              <Button
-                variant="outline"
-                disabled={!column.column_default}
-                onClick={() => onChange({ kind: "default", column: name, default: null })}
-              >
-                Drop
-              </Button>
-            </div>
-          </div>
-          <div>
-            <Button
-              variant="outline"
-              onClick={() => onChange({ kind: "nullable", column: name, nullable: !nullable })}
-            >
-              {nullable ? "Set NOT NULL" : "Drop NOT NULL"}
-            </Button>
-          </div>
-          {hasTables && (
-            <div className="grid gap-2">
-              <span>Foreign key</span>
-              <ReferencePicker
-                tables={tables}
-                value={reference}
-                onChange={setReference}
-                idPrefix="edit-fk"
-              />
-              <div>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    onChange({ kind: "reference", column: name, references: reference })
-                  }
-                >
-                  Queue
-                </Button>
-              </div>
             </div>
           )}
+          <div className="grid gap-1">
+            <Label htmlFor="edit-default">Default expression (empty for none)</Label>
+            <Input
+              id="edit-default"
+              className="font-mono"
+              placeholder="now()"
+              value={form.default}
+              onChange={(e) => setForm({ ...form, default: e.target.value })}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="edit-nullable"
+              checked={form.nullable}
+              onCheckedChange={(c) => setForm({ ...form, nullable: c === true })}
+            />
+            <Label htmlFor="edit-nullable">Nullable</Label>
+          </div>
+          {foreignKey ? (
+            <p className="text-muted-foreground">
+              References{" "}
+              <span className="font-mono">
+                {foreignKey.refSchema}.{foreignKey.refTable}({foreignKey.refColumn})
+              </span>
+              . Change or drop it from the Constraints tab.
+            </p>
+          ) : (
+            hasTables && (
+              <>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="edit-fk"
+                    checked={reference !== null}
+                    onCheckedChange={(c) =>
+                      setReference(c === true ? firstReference(tables, schema) : null)
+                    }
+                  />
+                  <Label htmlFor="edit-fk">Foreign key</Label>
+                </div>
+                {reference && (
+                  <ReferencePicker
+                    tables={tables}
+                    value={reference}
+                    onChange={setReference}
+                    idPrefix="edit-fk"
+                  />
+                )}
+              </>
+            )
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button disabled={!valid || changes.length === 0} onClick={() => onSave(changes)}>
+              Save
+            </Button>
+          </DialogFooter>
         </div>
       </DialogContent>
     </Dialog>

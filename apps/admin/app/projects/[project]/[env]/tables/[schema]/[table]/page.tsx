@@ -198,6 +198,7 @@ export default async function TablePage({
           schema={schema}
           table={table}
           columns={details.columns}
+          foreignKeys={details.foreignKeys}
           tables={allColumns}
         />
       )}
