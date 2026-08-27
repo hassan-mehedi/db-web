@@ -9,6 +9,8 @@
     "includes": [
       "**",
       "!**/.next",
+      "!**/test-results",
+      "!**/playwright-report",
       "!**/dist",
       "!**/node_modules",
       "!**/next-env.d.ts",
