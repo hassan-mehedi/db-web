@@ -40,6 +40,8 @@ export interface ColumnRow {
   data_type: string;
   is_nullable: "YES" | "NO";
   column_default: string | null;
+  is_identity: "YES" | "NO";
+  identity_generation: "ALWAYS" | "BY DEFAULT" | null;
   character_maximum_length: number | null;
   numeric_precision: number | null;
 }

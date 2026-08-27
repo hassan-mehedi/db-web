@@ -11,7 +11,6 @@ export const COMMON_TYPES = [
   "numeric",
   "numeric(12,2)",
   "real",
-  "serial",
   "smallint",
   "text",
   "text[]",
@@ -23,5 +22,20 @@ export const COMMON_TYPES = [
   "vector(1536)",
 ] as const;
 
-export const IDENTITY_TYPE = "bigint generated always as identity";
-export const CREATE_TYPES = [...COMMON_TYPES, IDENTITY_TYPE] as const;
+const DEFAULTS_BY_TYPE: [RegExp, string[]][] = [
+  [/^uuid$/, ["gen_random_uuid()"]],
+  [/^timestamp/, ["now()", "CURRENT_TIMESTAMP"]],
+  [/^date$/, ["CURRENT_DATE", "now()"]],
+  [/^time/, ["CURRENT_TIME", "now()"]],
+  [/^bool/, ["false", "true"]],
+  [/^(small|big)?int|^int[248]$|^numeric|^real|^double|^decimal/, ["0"]],
+  [/^jsonb?$/, ["'{}'", "'[]'"]],
+  [/^(text|varchar|character varying|char)/, ["''"]],
+  [/\[\]$/, ["'{}'"]],
+];
+
+export function defaultSuggestions(type: string): string[] {
+  const t = type.trim().toLowerCase();
+  const match = DEFAULTS_BY_TYPE.find(([re]) => re.test(t));
+  return match ? match[1] : [];
+}

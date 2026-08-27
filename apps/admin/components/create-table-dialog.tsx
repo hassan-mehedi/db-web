@@ -1,10 +1,18 @@
 "use client";
 
-import { type ColumnSpec, createTable, isSafeExpression, isValidType } from "@db-web/sql";
+import {
+  type ColumnSpec,
+  createTable,
+  isSafeExpression,
+  isSerialType,
+  isValidType,
+  supportsIdentity,
+} from "@db-web/sql";
 import { Link2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { createTableAction } from "@/app/actions/schema";
+import { DefaultInput } from "@/components/default-input";
 import { FormError } from "@/components/form-error";
 import { firstReference, ReferencePicker } from "@/components/reference-picker";
 import { SqlPreview } from "@/components/sql-preview";
@@ -27,7 +35,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CREATE_TYPES } from "@/lib/pg-types";
 import type { CompletionSchema } from "@/lib/queries";
 import { tablePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -35,7 +42,7 @@ import { cn } from "@/lib/utils";
 type Row = ColumnSpec & { pk: boolean };
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 const initialRows: Row[] = [
-  { name: "id", type: "bigint generated always as identity", nullable: false, pk: true },
+  { name: "id", type: "bigint", nullable: false, identity: "always", pk: true },
   { name: "created_at", type: "timestamptz", nullable: false, default: "now()", pk: false },
 ];
 
@@ -61,8 +68,9 @@ export function CreateTableDialog({
     () => ({
       schema,
       name,
-      columns: rows.map(({ pk: _pk, default: d, references, ...c }) => ({
+      columns: rows.map(({ pk: _pk, default: d, references, identity, ...c }) => ({
         ...c,
+        ...(identity ? { identity } : {}),
         ...(d ? { default: d } : {}),
         ...(references ? { references } : {}),
       })),
@@ -85,7 +93,12 @@ export function CreateTableDialog({
     rows.length > 0 &&
     rows.every(
       (r) =>
-        IDENT.test(r.name) && isValidType(r.type) && (!r.default || isSafeExpression(r.default)),
+        IDENT.test(r.name) &&
+        isValidType(r.type) &&
+        !isSerialType(r.type) &&
+        (!r.default || isSafeExpression(r.default)) &&
+        !(r.identity && r.default) &&
+        (!r.identity || supportsIdentity(r.type)),
     ) &&
     new Set(rows.map((r) => r.name)).size === rows.length;
 
@@ -150,10 +163,13 @@ export function CreateTableDialog({
               />
             </div>
             <div className="grid gap-2">
-              <div className="grid grid-cols-[1fr_1.5fr_1fr_1.75rem_1.75rem_1.75rem_1.75rem] items-center gap-2 text-xs text-muted-foreground">
+              <div className="grid grid-cols-[1fr_1.5fr_1fr_1.75rem_1.75rem_1.75rem_1.75rem_1.75rem] items-center gap-2 text-xs text-muted-foreground">
                 <span>Name</span>
                 <span>Type</span>
                 <span>Default</span>
+                <span className="text-center" title="auto increment">
+                  Auto
+                </span>
                 <span className="text-center">Null</span>
                 <span className="text-center">PK</span>
                 <span className="text-center">FK</span>
@@ -163,7 +179,7 @@ export function CreateTableDialog({
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional
                   key={i}
-                  className="grid grid-cols-[1fr_1.5fr_1fr_1.75rem_1.75rem_1.75rem_1.75rem] items-center gap-2"
+                  className="grid grid-cols-[1fr_1.5fr_1fr_1.75rem_1.75rem_1.75rem_1.75rem_1.75rem] items-center gap-2"
                 >
                   <Input
                     className="font-mono"
@@ -173,18 +189,50 @@ export function CreateTableDialog({
                   <TypeInput
                     database={database}
                     value={r.type}
-                    onChange={(type) => update(i, { type })}
-                    suggestions={CREATE_TYPES}
+                    onChange={(type) => {
+                      const { identity, ...rest } = r;
+                      setRows((prev) =>
+                        prev.map((row, j) =>
+                          j === i
+                            ? {
+                                ...rest,
+                                type,
+                                ...(identity && supportsIdentity(type) ? { identity } : {}),
+                              }
+                            : row,
+                        ),
+                      );
+                    }}
                   />
-                  <Input
-                    className="font-mono"
+                  <DefaultInput
+                    type={r.type}
                     value={r.default ?? ""}
-                    onChange={(e) => update(i, { default: e.target.value })}
+                    disabled={!!r.identity}
+                    onChange={(d) => update(i, { default: d })}
                   />
+                  <div className="flex h-8 w-7 items-center justify-center">
+                    <Checkbox
+                      aria-label="auto increment"
+                      checked={!!r.identity}
+                      disabled={!supportsIdentity(r.type)}
+                      onCheckedChange={(c) =>
+                        setRows((prev) =>
+                          prev.map((row, j) => {
+                            if (j !== i) return row;
+                            const { identity: _identity, default: _default, ...rest } = row;
+                            return c === true
+                              ? { ...rest, identity: "always", nullable: false }
+                              : rest;
+                          }),
+                        )
+                      }
+                    />
+                  </div>
                   <div className="flex h-8 w-7 items-center justify-center">
                     <Checkbox
                       aria-label="nullable"
                       checked={r.nullable}
+                      disabled={!!r.identity}
                       onCheckedChange={(c) => update(i, { nullable: c === true })}
                     />
                   </div>

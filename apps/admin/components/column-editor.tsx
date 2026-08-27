@@ -4,13 +4,18 @@ import {
   alterColumns,
   type ColumnChange,
   type ColumnReference,
+  type Identity,
   isSafeExpression,
+  isSerialType,
   isValidType,
+  supportsIdentity,
 } from "@db-web/sql";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { alterColumnsAction } from "@/app/actions/schema";
+import { DefaultInput } from "@/components/default-input";
 import { FormError } from "@/components/form-error";
+import { IdentitySelect } from "@/components/identity-select";
 import { firstReference, ReferencePicker } from "@/components/reference-picker";
 import { SqlPreview } from "@/components/sql-preview";
 import { TypeInput } from "@/components/type-input";
@@ -49,9 +54,10 @@ type Draft = {
   type: string;
   nullable: boolean;
   default: string;
+  identity: Identity | null;
   references?: ColumnReference;
 };
-const emptyDraft: Draft = { name: "", type: "text", nullable: true, default: "" };
+const emptyDraft: Draft = { name: "", type: "text", nullable: true, default: "", identity: null };
 
 function describeReference(r: ColumnReference): string {
   return `${r.schema}.${r.table}(${r.column})`;
@@ -73,6 +79,8 @@ function describe(c: ColumnChange): string {
       return `${c.column} default ${c.default === null ? "dropped" : `→ ${c.default}`}`;
     case "reference":
       return `${c.column} → ${describeReference(c.references)}`;
+    case "identity":
+      return `${c.column} auto increment ${c.identity ?? "off"}`;
   }
 }
 
@@ -112,6 +120,8 @@ export function ColumnEditor({ database, schema, table, columns, foreignKeys, ta
   const draftValid =
     /^[a-z_][a-z0-9_]*$/.test(draft.name) &&
     isValidType(draft.type) &&
+    !isSerialType(draft.type) &&
+    (draft.identity === null || supportsIdentity(draft.type)) &&
     (draft.default === "" || isSafeExpression(draft.default));
 
   return (
@@ -135,7 +145,11 @@ export function ColumnEditor({ database, schema, table, columns, foreignKeys, ta
                 {c.character_maximum_length ? `(${c.character_maximum_length})` : ""}
               </TableCell>
               <TableCell>{c.is_nullable === "YES" ? "yes" : "no"}</TableCell>
-              <TableCell className="font-mono text-xs">{c.column_default ?? ""}</TableCell>
+              <TableCell className="font-mono text-xs">
+                {c.is_identity === "YES"
+                  ? `identity (${c.identity_generation?.toLowerCase()})`
+                  : (c.column_default ?? "")}
+              </TableCell>
               <TableCell className="space-x-2 text-right whitespace-nowrap">
                 <Button size="sm" variant="outline" onClick={() => setEditing(c)}>
                   Edit
@@ -209,23 +223,42 @@ export function ColumnEditor({ database, schema, table, columns, foreignKeys, ta
                 id="col-type"
                 database={database}
                 value={draft.type}
-                onChange={(type) => setDraft({ ...draft, type })}
+                onChange={(type) =>
+                  setDraft({
+                    ...draft,
+                    type,
+                    identity: supportsIdentity(type) ? draft.identity : null,
+                  })
+                }
               />
             </div>
+            <IdentitySelect
+              id="col-identity"
+              type={draft.type}
+              value={draft.identity}
+              onChange={(identity) =>
+                setDraft({
+                  ...draft,
+                  identity,
+                  ...(identity ? { default: "", nullable: false } : {}),
+                })
+              }
+            />
             <div className="grid gap-1">
               <Label htmlFor="col-default">Default expression (optional)</Label>
-              <Input
+              <DefaultInput
                 id="col-default"
-                className="font-mono"
-                placeholder="now()"
+                type={draft.type}
                 value={draft.default}
-                onChange={(e) => setDraft({ ...draft, default: e.target.value })}
+                disabled={draft.identity !== null}
+                onChange={(d) => setDraft({ ...draft, default: d })}
               />
             </div>
             <div className="flex items-center gap-2">
               <Checkbox
                 id="col-nullable"
                 checked={draft.nullable}
+                disabled={draft.identity !== null}
                 onCheckedChange={(c) => setDraft({ ...draft, nullable: c === true })}
               />
               <Label htmlFor="col-nullable">Nullable</Label>
@@ -263,6 +296,7 @@ export function ColumnEditor({ database, schema, table, columns, foreignKeys, ta
                       name: draft.name,
                       type: draft.type,
                       nullable: draft.nullable,
+                      ...(draft.identity ? { identity: draft.identity } : {}),
                       ...(draft.default ? { default: draft.default } : {}),
                       ...(draft.references ? { references: draft.references } : {}),
                     },
@@ -317,6 +351,11 @@ export function ColumnEditor({ database, schema, table, columns, foreignKeys, ta
   );
 }
 
+function identityOf(column: ColumnRow): Identity | null {
+  if (column.is_identity !== "YES") return null;
+  return column.identity_generation === "ALWAYS" ? "always" : "default";
+}
+
 function currentType(column: ColumnRow): string {
   if (column.data_type === "character varying" && column.character_maximum_length) {
     return `varchar(${column.character_maximum_length})`;
@@ -346,7 +385,8 @@ function EditColumnDialog({
     name,
     type: currentType(column),
     nullable: column.is_nullable === "YES",
-    default: column.column_default ?? "",
+    default: column.is_identity === "YES" ? "" : (column.column_default ?? ""),
+    identity: identityOf(column),
   };
   const [form, setForm] = useState(initial);
   const [using, setUsing] = useState("");
@@ -358,11 +398,20 @@ function EditColumnDialog({
   if (typeChanged) {
     changes.push({ kind: "type", column: name, type: form.type, ...(using ? { using } : {}) });
   }
-  if (form.nullable !== initial.nullable) {
-    changes.push({ kind: "nullable", column: name, nullable: form.nullable });
+  const nullable = form.identity ? false : form.nullable;
+  if (nullable !== initial.nullable) {
+    changes.push({ kind: "nullable", column: name, nullable });
   }
   if (form.default !== initial.default) {
     changes.push({ kind: "default", column: name, default: form.default || null });
+  }
+  if (form.identity !== initial.identity) {
+    changes.push({
+      kind: "identity",
+      column: name,
+      identity: form.identity,
+      existing: initial.identity !== null,
+    });
   }
   if (reference) changes.push({ kind: "reference", column: name, references: reference });
   if (form.name !== name) changes.push({ kind: "rename", column: name, to: form.name });
@@ -371,6 +420,8 @@ function EditColumnDialog({
     /^[a-z_][a-z0-9_]*$/.test(form.name) &&
     isValidType(form.type) &&
     !/\bgenerated\b/i.test(form.type) &&
+    !isSerialType(form.type) &&
+    (form.identity === null || supportsIdentity(form.type)) &&
     (using === "" || isSafeExpression(using)) &&
     (form.default === "" || isSafeExpression(form.default));
 
@@ -396,8 +447,15 @@ function EditColumnDialog({
               id="edit-type"
               database={database}
               value={form.type}
-              onChange={(type) => setForm({ ...form, type })}
+              onChange={(type) =>
+                setForm({ ...form, type, identity: supportsIdentity(type) ? form.identity : null })
+              }
             />
+            {isSerialType(form.type) && (
+              <span className="text-[11px] text-destructive">
+                Pick an integer type and turn on auto increment instead of serial.
+              </span>
+            )}
           </div>
           {typeChanged && (
             <div className="grid gap-1">
@@ -411,20 +469,29 @@ function EditColumnDialog({
               />
             </div>
           )}
+          <IdentitySelect
+            id="edit-identity"
+            type={form.type}
+            value={form.identity}
+            onChange={(identity) =>
+              setForm({ ...form, identity, ...(identity ? { default: "", nullable: false } : {}) })
+            }
+          />
           <div className="grid gap-1">
             <Label htmlFor="edit-default">Default expression (empty for none)</Label>
-            <Input
+            <DefaultInput
               id="edit-default"
-              className="font-mono"
-              placeholder="now()"
+              type={form.type}
               value={form.default}
-              onChange={(e) => setForm({ ...form, default: e.target.value })}
+              disabled={form.identity !== null}
+              onChange={(d) => setForm({ ...form, default: d })}
             />
           </div>
           <div className="flex items-center gap-2">
             <Checkbox
               id="edit-nullable"
-              checked={form.nullable}
+              checked={form.identity ? false : form.nullable}
+              disabled={form.identity !== null}
               onCheckedChange={(c) => setForm({ ...form, nullable: c === true })}
             />
             <Label htmlFor="edit-nullable">Nullable</Label>

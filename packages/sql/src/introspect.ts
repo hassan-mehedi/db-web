@@ -32,7 +32,7 @@ WHERE c.relkind IN ('r', 'p')
 ORDER BY n.nspname, c.relname`;
 
 export const listColumns = `
-SELECT column_name, data_type, is_nullable, column_default,
+SELECT column_name, data_type, is_nullable, column_default, is_identity, identity_generation,
        character_maximum_length, numeric_precision, ordinal_position
 FROM information_schema.columns
 WHERE table_schema = $1 AND table_name = $2

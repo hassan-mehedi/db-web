@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ColumnEditor } from "@/components/column-editor";
 import { AddConstraintDialog, DropConstraintButton } from "@/components/constraint-dialogs";
 import { DataGrid } from "@/components/data-grid";
 import { DropTableDialog } from "@/components/drop-table-dialog";
 import { CreateIndexDialog, DropIndexButton } from "@/components/index-dialogs";
+import { TableTabs, TabSkeleton } from "@/components/table-tabs";
 import { TablesLayout } from "@/components/tables-layout";
 import {
   Pagination,
@@ -50,15 +52,7 @@ export default async function TablePage({
   searchParams,
 }: {
   params: Promise<EnvParams & { schema: string; table: string }>;
-  searchParams: Promise<{
-    tab?: string;
-    page?: string;
-    after?: string;
-    before?: string;
-    count?: string;
-    f?: string;
-    s?: string;
-  }>;
+  searchParams: Promise<SearchParams>;
 }) {
   await requireSession();
   const { project, env, schema, table } = await params;
@@ -77,9 +71,90 @@ export default async function TablePage({
     return `${base}?${q}`;
   };
 
-  const [details, schemas, allColumns] = await Promise.all([
+  const schemas = await getSchemasWithTables(database);
+
+  return (
+    <TablesLayout
+      database={database}
+      schemas={schemas}
+      selected={{ schema, table }}
+      crumbs={[
+        { label: project, href: projectPath(project) },
+        { label: envLabel(env), href: envPath(database) },
+        { label: "tables", href: tablesPath(database) },
+        { label: `${schema}.${table}` },
+      ]}
+    >
+      <TableTabs
+        base={base}
+        tabs={TABS}
+        active={tab}
+        actions={<DropTableDialog database={database} schema={schema} table={table} />}
+      >
+        <Suspense
+          key={JSON.stringify(sp)}
+          fallback={<TabSkeleton rows={tab === "data" ? 10 : 5} />}
+        >
+          <TabBody
+            database={database}
+            schema={schema}
+            table={table}
+            tab={tab}
+            sp={sp}
+            page={page}
+            exact={exact}
+            dataQuery={dataQuery}
+            schemas={schemas}
+          />
+        </Suspense>
+      </TableTabs>
+    </TablesLayout>
+  );
+}
+
+function parseCursor(raw: string | undefined): string[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const v: unknown = JSON.parse(raw);
+    return Array.isArray(v) && v.every((x) => typeof x === "string") ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+type SearchParams = {
+  tab?: string;
+  page?: string;
+  after?: string;
+  before?: string;
+  count?: string;
+  f?: string;
+  s?: string;
+};
+
+async function TabBody({
+  database,
+  schema,
+  table,
+  tab,
+  sp,
+  page,
+  exact,
+  dataQuery,
+  schemas,
+}: {
+  database: string;
+  schema: string;
+  table: string;
+  tab: Tab;
+  sp: SearchParams;
+  page: number;
+  exact: boolean;
+  dataQuery: (extra: Record<string, string | undefined>) => string;
+  schemas: Awaited<ReturnType<typeof getSchemasWithTables>>;
+}) {
+  const [details, allColumns] = await Promise.all([
     getTableDetails(database, schema, table),
-    getSchemasWithTables(database),
     getCompletionSchema(database),
   ]);
   const columnNames = details.columns.map((c) => c.column_name);
@@ -102,32 +177,7 @@ export default async function TablePage({
   const rel = { database, schema, table };
 
   return (
-    <TablesLayout
-      database={database}
-      schemas={schemas}
-      selected={{ schema, table }}
-      crumbs={[
-        { label: project, href: projectPath(project) },
-        { label: envLabel(env), href: envPath(database) },
-        { label: "tables", href: tablesPath(database) },
-        { label: `${schema}.${table}` },
-      ]}
-    >
-      <div className="mb-4 flex items-center gap-1 border-b">
-        {TABS.map((t) => (
-          <Link
-            key={t}
-            href={`${base}?tab=${t}`}
-            className={`px-3 py-2 text-sm ${t === tab ? "-mb-px border-b-2 border-primary font-medium text-primary" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            {t}
-          </Link>
-        ))}
-        <div className="ml-auto pb-2">
-          <DropTableDialog database={database} schema={schema} table={table} />
-        </div>
-      </div>
-
+    <>
       {tab === "data" && data && (
         <>
           <DataGrid
@@ -274,16 +324,6 @@ export default async function TablePage({
           </Table>
         </div>
       )}
-    </TablesLayout>
+    </>
   );
-}
-
-function parseCursor(raw: string | undefined): string[] | undefined {
-  if (!raw) return undefined;
-  try {
-    const v: unknown = JSON.parse(raw);
-    return Array.isArray(v) && v.every((x) => typeof x === "string") ? v : undefined;
-  } catch {
-    return undefined;
-  }
 }
