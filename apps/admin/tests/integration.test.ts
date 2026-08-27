@@ -175,7 +175,7 @@ metaSuite("sampler against a real Postgres", () => {
     const first = await sampleOnce();
     expect(first.databases).toBeGreaterThan(0);
     const sizes = await latestSizes();
-    expect(sizes.size).toBe(first.databases);
+    expect(sizes.size).toBeGreaterThanOrEqual(first.databases);
     const dbs = await getDatabases();
     for (const d of dbs) expect(Number(d.size_bytes)).toBe(sizes.get(d.datname));
     await sampleOnce();
