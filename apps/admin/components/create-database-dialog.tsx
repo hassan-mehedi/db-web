@@ -3,7 +3,6 @@
 import {
   bootstrapProjectEnv,
   createDatabasePlan,
-  isValidDatabaseName,
   planToSql,
   projectRoles,
 } from "@db-web/bootstrap";
@@ -24,20 +23,29 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { generatePassword } from "@/lib/password";
+import { databaseName, isValidProjectEnv } from "@/lib/projects";
 
 type Step = "form" | "preview" | "done";
 
-export function CreateDatabaseDialog() {
+export function CreateDatabaseDialog({
+  project: fixedProject,
+  label,
+}: {
+  project?: string;
+  label?: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("form");
-  const [name, setName] = useState("");
+  const [project, setProject] = useState(fixedProject ?? "");
+  const [env, setEnv] = useState("");
+  const name = databaseName(project, env);
   const [bootstrap, setBootstrap] = useState(true);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const valid = isValidDatabaseName(name);
+  const valid = isValidProjectEnv(project, env);
   const sql = useMemo(() => {
     if (!valid) return "";
     const plan = bootstrap
@@ -53,7 +61,8 @@ export function CreateDatabaseDialog() {
 
   function reset() {
     setStep("form");
-    setName("");
+    setProject(fixedProject ?? "");
+    setEnv("");
     setBootstrap(true);
     setPassword("");
     setError(null);
@@ -85,34 +94,52 @@ export function CreateDatabaseDialog() {
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
       <DialogTrigger asChild>
-        <Button size="sm">New database</Button>
+        <Button size="sm">{label ?? (fixedProject ? "New environment" : "New project")}</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Create database</DialogTitle>
+          <DialogTitle>
+            {fixedProject ? `New environment in ${fixedProject}` : "New project"}
+          </DialogTitle>
           <DialogDescription>
-            Name as <code>{"{project}_{env}"}</code>, lowercase, e.g. <code>recipes_dev</code>.
+            Creates database <code className="font-mono">{valid ? name : "{project}_{env}"}</code>.
+            Lowercase letters and digits only.
           </DialogDescription>
         </DialogHeader>
 
         {step === "form" && (
           <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="db-name">Name</Label>
-              <Input
-                id="db-name"
-                value={name}
-                onChange={(e) => setName(e.target.value.trim())}
-                placeholder="recipes_dev"
-                className="font-mono"
-                autoFocus
-              />
-              {name && !valid && (
-                <p className="text-xs text-destructive">
-                  Must match <code>{"^[a-z][a-z0-9]*_[a-z0-9]+$"}</code>, max 49 chars.
-                </p>
-              )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="db-project">Project</Label>
+                <Input
+                  id="db-project"
+                  value={project}
+                  onChange={(e) => setProject(e.target.value.trim())}
+                  placeholder="recipes"
+                  className="font-mono"
+                  disabled={Boolean(fixedProject)}
+                  autoFocus={!fixedProject}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="db-env">Environment</Label>
+                <Input
+                  id="db-env"
+                  value={env}
+                  onChange={(e) => setEnv(e.target.value.trim())}
+                  placeholder="dev"
+                  className="font-mono"
+                  autoFocus={Boolean(fixedProject)}
+                />
+              </div>
             </div>
+            {(project || env) && !valid && (
+              <p className="text-xs text-destructive">
+                Project: letters and digits, starting with a letter. Environment: letters and
+                digits. Whole name max 49 chars.
+              </p>
+            )}
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

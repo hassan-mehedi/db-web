@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/app/actions/cluster";
+import { queryPath } from "@/lib/routes";
 import { deleteSavedQuery, saveQuery } from "@/lib/saved-queries";
 import { requireSession } from "@/lib/session";
 
@@ -20,7 +21,7 @@ export async function saveQueryAction(
   if (!sql.trim()) return { ok: false, error: "query is empty" };
   try {
     await saveQuery(database, trimmed, sql);
-    revalidatePath(`/db/${database}/query`);
+    revalidatePath(queryPath(database));
     return { ok: true, sql: "" };
   } catch (err) {
     return fail(err);
@@ -31,7 +32,7 @@ export async function deleteSavedQueryAction(database: string, id: string): Prom
   await requireSession();
   try {
     await deleteSavedQuery(id);
-    revalidatePath(`/db/${database}/query`);
+    revalidatePath(queryPath(database));
     return { ok: true, sql: "" };
   } catch (err) {
     return fail(err);

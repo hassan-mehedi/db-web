@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { parseDatabaseName } from "@/lib/projects";
+import { projectPath } from "@/lib/routes";
 
 export function DropDatabaseDialog({ database }: { database: string }) {
   const router = useRouter();
@@ -36,7 +38,7 @@ export function DropDatabaseDialog({ database }: { database: string }) {
       if (!res.ok) setError(res.error);
       else {
         setOpen(false);
-        router.push("/");
+        router.push(projectPath(parseDatabaseName(database).project));
       }
     });
   }

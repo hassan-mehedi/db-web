@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { tablePath } from "@/lib/routes";
 
 type Row = ColumnSpec & { pk: boolean };
 const IDENT = /^[a-z_][a-z0-9_]*$/;
@@ -86,7 +87,7 @@ export function CreateTableDialog({ database, schemas }: { database: string; sch
       if (!res.ok) setError(res.error);
       else {
         close();
-        router.push(`/db/${database}/${schema}/${name}?tab=columns`);
+        router.push(`${tablePath(database, schema, name)}?tab=columns`);
       }
     });
   }

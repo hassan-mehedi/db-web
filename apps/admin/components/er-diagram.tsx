@@ -1,4 +1,5 @@
 import type { DiagramEdge, DiagramTable } from "@/lib/diagram";
+import { tablePath } from "@/lib/routes";
 
 const BOX_W = 220;
 const ROW_H = 18;
@@ -91,7 +92,7 @@ export function ErDiagram({
           <g key={`${t.schema}.${t.name}`} transform={`translate(${x},${y})`}>
             <rect width={BOX_W} height={h} rx={6} className="fill-card stroke-border" />
             <rect width={BOX_W} height={HEAD_H} rx={6} className="fill-muted" />
-            <a href={`/db/${database}/${t.schema}/${t.name}`}>
+            <a href={tablePath(database, t.schema, t.name)}>
               <text x={10} y={17} className="fill-foreground font-mono text-[12px] font-semibold">
                 {t.schema !== "public" ? `${t.schema}.` : ""}
                 {t.name}

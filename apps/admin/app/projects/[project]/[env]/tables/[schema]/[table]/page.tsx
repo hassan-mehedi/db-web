@@ -4,7 +4,7 @@ import { AddConstraintDialog, DropConstraintButton } from "@/components/constrai
 import { DataGrid } from "@/components/data-grid";
 import { DropTableDialog } from "@/components/drop-table-dialog";
 import { CreateIndexDialog, DropIndexButton } from "@/components/index-dialogs";
-import { Shell } from "@/components/shell";
+import { TablesLayout } from "@/components/tables-layout";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,7 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { type EnvParams, resolveDatabase } from "@/lib/env-params";
 import { getSchemasWithTables, getTableData, getTableDetails, PAGE_SIZE } from "@/lib/queries";
+import { envPath, projectPath, tablePath, tablesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -34,37 +36,46 @@ export default async function TablePage({
   params,
   searchParams,
 }: {
-  params: Promise<{ database: string; schema: string; table: string }>;
+  params: Promise<EnvParams & { schema: string; table: string }>;
   searchParams: Promise<{ tab?: string; page?: string }>;
 }) {
   await requireSession();
-  const { database, schema, table } = await params;
+  const { project, env, schema, table } = await params;
+  const database = resolveDatabase({ project, env });
   const sp = await searchParams;
   const tab: Tab = TABS.includes(sp.tab as Tab) ? (sp.tab as Tab) : "data";
   const page = Math.max(0, Number(sp.page ?? 0) || 0);
-  const base = `/db/${database}/${schema}/${table}`;
+  const base = tablePath(database, schema, table);
 
-  const details = await getTableDetails(database, schema, table);
+  const [details, schemas] = await Promise.all([
+    getTableDetails(database, schema, table),
+    getSchemasWithTables(database),
+  ]);
   const data = tab === "data" ? await getTableData(database, schema, table, page) : null;
-  const allTables =
-    tab === "constraints"
-      ? (await getSchemasWithTables(database)).flatMap((s) =>
-          s.tables.map((t) => ({ schema: s.schema, table: t.relname })),
-        )
-      : [];
+  const allTables = schemas.flatMap((s) =>
+    s.tables.map((t) => ({ schema: s.schema, table: t.relname })),
+  );
   const rel = { database, schema, table };
   const columnNames = details.columns.map((c) => c.column_name);
 
   return (
-    <Shell
-      crumbs={[{ label: database, href: `/db/${database}` }, { label: schema }, { label: table }]}
+    <TablesLayout
+      database={database}
+      schemas={schemas}
+      selected={{ schema, table }}
+      crumbs={[
+        { label: project, href: projectPath(project) },
+        { label: env, href: envPath(database) },
+        { label: "tables", href: tablesPath(database) },
+        { label: `${schema}.${table}` },
+      ]}
     >
       <div className="mb-4 flex items-center gap-1 border-b">
         {TABS.map((t) => (
           <Link
             key={t}
             href={`${base}?tab=${t}`}
-            className={`px-3 py-2 text-sm ${t === tab ? "border-b-2 border-foreground font-medium" : "text-muted-foreground"}`}
+            className={`px-3 py-2 text-sm ${t === tab ? "-mb-px border-b-2 border-primary font-medium text-primary" : "text-muted-foreground hover:text-foreground"}`}
           >
             {t}
           </Link>
@@ -181,6 +192,6 @@ export default async function TablePage({
           </Table>
         </div>
       )}
-    </Shell>
+    </TablesLayout>
   );
 }

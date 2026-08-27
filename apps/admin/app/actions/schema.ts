@@ -11,6 +11,7 @@ import {
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/app/actions/cluster";
 import { audit } from "@/lib/audit";
+import { tablePath, tablesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 
 function fail(err: unknown): { ok: false; error: string } {
@@ -39,7 +40,7 @@ export async function createTableAction(
     const sql = createTable(input);
     audit("create-table", database, sql);
     await runInTransaction(database, [sql]);
-    revalidatePath(`/db/${database}`);
+    revalidatePath(tablesPath(database));
     return { ok: true, sql };
   } catch (err) {
     return fail(err);
@@ -56,7 +57,7 @@ export async function dropTableAction(
     const sql = dropTable(schema, table);
     audit("drop-table", database, sql);
     await runInTransaction(database, [sql]);
-    revalidatePath(`/db/${database}`);
+    revalidatePath(tablesPath(database));
     return { ok: true, sql };
   } catch (err) {
     return fail(err);
@@ -76,7 +77,7 @@ export async function alterColumnsAction(
     const sql = `${statements.join(";\n")};`;
     audit("alter-columns", database, sql);
     await runInTransaction(database, statements);
-    revalidatePath(`/db/${database}/${schema}/${table}`);
+    revalidatePath(tablePath(database, schema, table));
     return { ok: true, sql };
   } catch (err) {
     return fail(err);

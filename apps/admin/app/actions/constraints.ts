@@ -16,6 +16,7 @@ import {
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/app/actions/cluster";
 import { audit } from "@/lib/audit";
+import { tablePath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 
 function fail(err: unknown): { ok: false; error: string } {
@@ -39,7 +40,7 @@ async function run(
   }
 }
 
-const rel = (db: string, s: string, t: string) => `/db/${db}/${s}/${t}`;
+const rel = (db: string, s: string, t: string) => tablePath(db, s, t);
 
 export async function createIndexAction(database: string, input: CreateIndexInput) {
   let sql: string;

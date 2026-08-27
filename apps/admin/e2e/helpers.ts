@@ -12,5 +12,5 @@ export async function login(page: Page) {
   await page.waitForURL("**/login/2fa");
   await page.fill("#code", await createOTP(rawSecret).totp());
   await page.click("button[type=submit]");
-  await page.waitForURL("/");
+  await page.waitForURL("/projects");
 }

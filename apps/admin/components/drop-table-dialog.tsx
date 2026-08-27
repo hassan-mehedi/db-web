@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { tablesPath } from "@/lib/routes";
 
 export function DropTableDialog({
   database,
@@ -38,7 +39,7 @@ export function DropTableDialog({
       if (!res.ok) setError(res.error);
       else {
         setOpen(false);
-        router.push(`/db/${database}`);
+        router.push(tablesPath(database));
       }
     });
   }

@@ -1,10 +1,10 @@
+import { AppShell } from "@/components/app-shell";
 import {
   CreateRoleDialog,
   DropRoleDialog,
   GrantRoleDialog,
   RevokeRoleButton,
 } from "@/components/role-dialogs";
-import { Shell } from "@/components/shell";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -24,13 +24,8 @@ export default async function RolesPage() {
   const roles = await getRoles();
   const grantable = roles.filter((r) => !r.rolsuper).map((r) => r.rolname);
   return (
-    <Shell crumbs={[{ label: "roles" }]}>
-      <div className="mb-4 flex items-center">
-        <h1 className="text-xl font-semibold">Roles</h1>
-        <div className="ml-auto">
-          <CreateRoleDialog />
-        </div>
-      </div>
+    <AppShell crumbs={[{ label: "cluster roles" }]} actions={<CreateRoleDialog />}>
+      <h1 className="mb-4 text-xl font-semibold">Cluster roles</h1>
       <Table>
         <TableHeader>
           <TableRow>
@@ -70,6 +65,6 @@ export default async function RolesPage() {
           ))}
         </TableBody>
       </Table>
-    </Shell>
+    </AppShell>
   );
 }

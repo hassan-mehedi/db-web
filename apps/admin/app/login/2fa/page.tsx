@@ -21,7 +21,7 @@ export default function TwoFactorPage() {
     const { error } = await authClient.twoFactor.verifyTotp({ code });
     setBusy(false);
     if (error) setError(error.message ?? "invalid code");
-    else router.push("/");
+    else router.push("/projects");
   }
 
   return (

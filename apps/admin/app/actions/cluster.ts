@@ -26,7 +26,7 @@ export async function createDatabaseAction(input: {
     const sql = planToSql(plan);
     audit("create-database", input.database, sql);
     await cluster.createDatabase(plan, input.database);
-    revalidatePath("/");
+    revalidatePath("/projects");
     return { ok: true, sql };
   } catch (err) {
     return fail(err);

@@ -24,7 +24,7 @@ export default function LoginPage() {
     });
     setBusy(false);
     if (error) setError(error.message ?? "sign in failed");
-    else router.push("/");
+    else router.push("/projects");
   }
 
   return (

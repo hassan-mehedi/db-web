@@ -5,6 +5,7 @@ import type { ActionResult } from "@/app/actions/cluster";
 import { audit } from "@/lib/audit";
 import { deleteRows, insertRow, type Rel, type RowKey, updateRow } from "@/lib/dml";
 import type { Cell } from "@/lib/format";
+import { tablePath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 
 function fail(err: unknown): { ok: false; error: string } {
@@ -12,7 +13,7 @@ function fail(err: unknown): { ok: false; error: string } {
 }
 
 function path(rel: Rel) {
-  return `/db/${rel.database}/${rel.schema}/${rel.table}`;
+  return tablePath(rel.database, rel.schema, rel.table);
 }
 
 export async function updateRowAction(
