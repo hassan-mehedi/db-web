@@ -59,6 +59,8 @@ name is `${project}_${env}`.
 
 ### V2-A — shell and theme
 
+Status 2026-08-27: done. Sidebar shell, palette, `/projects` routes, redirects from `/db/...`, e2e updated.
+
 1. `globals.css`: replace the shadcn defaults with the palette above. Keep
    the `.dark` class on `<html>`; drop the light variables since there is no
    light mode.
@@ -77,6 +79,8 @@ Exit: every v1 feature reachable from the new shell, in the new colours.
 
 ### V2-B — connection details and per-env roles
 
+Status 2026-08-27: done. Connect page with URL/psql/Node/Prisma/.env/PostgREST snippets and authenticator password reset (shown once). Env roles page with cluster toggle.
+
 1. `/connect`: cards for `psql`, Node `pg`, Prisma, PostgREST URL. Host is the
    Docker service name inside `dokploy-network` and the Tailscale hostname
    outside; a toggle switches. Role picker: `app_admin` (no password shown),
@@ -87,12 +91,16 @@ Exit: every v1 feature reachable from the new shell, in the new colours.
 
 ### V2-C — tables view
 
+Status 2026-08-27: done, shipped with V2-A. Tree with filter on the left, grid full width. Tree open/closed state is component state, not URL (dropped: back already works through the selected table path).
+
 1. Left tree: schema → table, row estimate, search box, collapsible. Right:
    the existing DataGrid and tabs, full width.
 2. Tree state (open schemas, selected table) in the URL so back works.
 3. Row count badge and a refresh button per table.
 
 ### V2-D — monitoring
+
+Status 2026-08-27: done. Sampler in `instrumentation.ts`, tables in `db_web_meta`, four SVG charts, slow statements from `pg_stat_statements`, live activity with terminate. VPS needs the Postgres restart and the grant from `infra/README.md` step 2.
 
 1. `infra/postgres/compose.yml`: add `-c shared_preload_libraries=pg_stat_statements`
    to the command. This needs a Postgres restart on the VPS (manual step,
@@ -113,6 +121,8 @@ Exit: every v1 feature reachable from the new shell, in the new colours.
 
 ### V2-E — environment cloning
 
+Status 2026-08-27: done. `cloneProjectEnv` in `packages/bootstrap`, dialog on the project page and env settings, typed confirm only when the source has external connections. Covered by e2e.
+
 1. `packages/sql`: `cloneDatabase({source, target})` →
    `CREATE DATABASE target TEMPLATE source OWNER app_admin`. Bootstrap roles
    for the target after (`{target}_anon` etc.) and re-grant, since roles are
@@ -124,6 +134,8 @@ Exit: every v1 feature reachable from the new shell, in the new colours.
    and one row count.
 
 ### V2-F — query history and explain
+
+Status 2026-08-27: done. `query_history` table (500 per database), history tab in the editor, Explain and Explain analyze (runs inside a transaction that rolls back).
 
 1. `db_web_meta.query_history (id, database, sql, rows, duration_ms, error,
    ran_at)`. Written by `executeQuery`. Keep the last 500 per database.
@@ -140,8 +152,7 @@ E, F. Each phase ends with lint, typecheck, unit tests, Playwright e2e, and a
 
 ## Open items
 
-- Branch for v2 work: proposal is a `v2` branch off `dev`, merged back when
-  V2-A is usable. Mehedi decides the name.
+- v2 was built on `dev` (decision 2026-08-27).
 - Whether the sampler should be a separate compose service instead of running
   inside the Next.js process. In-process is simpler; a second replica would
   double-sample. Dokploy runs one replica, so in-process is fine for now.

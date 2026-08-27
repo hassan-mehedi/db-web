@@ -19,12 +19,15 @@ export default async function globalSetup() {
   await admin.connect();
   const exists = await admin.query("SELECT 1 FROM pg_database WHERE datname = 'db_web_meta'");
   if (exists.rowCount === 0) await admin.query("CREATE DATABASE db_web_meta");
-  await admin.query(
-    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'e2e_dev' AND pid <> pg_backend_pid()",
-  );
-  await admin.query("DROP DATABASE IF EXISTS e2e_dev");
-  for (const r of ["e2e_dev_anon", "e2e_dev_user", "e2e_dev_authenticator"]) {
-    await admin.query(`DROP ROLE IF EXISTS ${r}`);
+  for (const db of ["e2e_dev", "e2e_test"]) {
+    await admin.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+      [db],
+    );
+    await admin.query(`DROP DATABASE IF EXISTS ${db}`);
+    for (const r of ["anon", "user", "authenticator"]) {
+      await admin.query(`DROP ROLE IF EXISTS ${db}_${r}`);
+    }
   }
   await admin.end();
 

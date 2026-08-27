@@ -9,6 +9,7 @@ exports[`bootstrapProjectEnv > matches the reference plan 1`] = `
     "CREATE ROLE "recipes_dev_authenticator" NOINHERIT LOGIN PASSWORD 'p''w'",
     "GRANT "recipes_dev_anon", "recipes_dev_user" TO "recipes_dev_authenticator"",
   ],
+  "database": "recipes_dev",
   "databaseStatements": [
     "CREATE SCHEMA api",
     "GRANT USAGE ON SCHEMA api TO "recipes_dev_anon", "recipes_dev_user"",

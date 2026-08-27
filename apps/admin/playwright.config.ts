@@ -18,6 +18,7 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: `http://127.0.0.1:${port}`,
+    screenshot: "only-on-failure",
     ...(process.env.CHROMIUM_PATH
       ? { launchOptions: { executablePath: process.env.CHROMIUM_PATH } }
       : {}),
@@ -27,6 +28,8 @@ export default defineConfig({
       "rm -rf .next/standalone/apps/admin/.next/static && cp -r .next/static .next/standalone/apps/admin/.next/static && cp -r public .next/standalone/apps/admin/ && node .next/standalone/apps/admin/server.js",
     port,
     reuseExistingServer: false,
+    stdout: "pipe",
+    stderr: "pipe",
     env: {
       PORT: String(port),
       HOSTNAME: "127.0.0.1",

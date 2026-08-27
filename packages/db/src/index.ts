@@ -22,6 +22,16 @@ export function poolFor(database: string): pg.Pool {
     idleTimeoutMillis: 30_000,
     statement_timeout: 30_000,
   });
+  pool.on("error", (err) => {
+    console.error(
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        action: "pool-error",
+        database,
+        error: err.message,
+      }),
+    );
+  });
   pools.set(database, pool);
   return pool;
 }

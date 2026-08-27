@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
+import { CloneDatabaseDialog } from "@/components/clone-database-dialog";
 import { CreateDatabaseDialog } from "@/components/create-database-dialog";
 import { EnvBadge } from "@/components/env-badge";
 import {
@@ -25,7 +26,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     envs: [],
   };
   return (
-    <AppShell crumbs={[{ label: project }]} actions={<CreateDatabaseDialog project={project} />}>
+    <AppShell
+      crumbs={[{ label: project }]}
+      actions={
+        <>
+          {group.envs.length > 0 && (
+            <CloneDatabaseDialog sources={group.envs.map((e) => e.database)} />
+          )}
+          <CreateDatabaseDialog project={project} />
+        </>
+      }
+    >
       <h1 className="mb-4 font-mono text-xl font-semibold">{project}</h1>
       <Table>
         <TableHeader>

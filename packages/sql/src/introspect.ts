@@ -44,3 +44,38 @@ SELECT rolname, rolcanlogin, rolcreatedb, rolcreaterole, rolsuper
 FROM pg_roles
 WHERE rolname NOT LIKE 'pg\\_%'
 ORDER BY rolname`;
+
+export const listActivity = `
+SELECT pid, usename, application_name, client_addr::text AS client_addr, state,
+       wait_event_type, backend_start::text, query_start::text, state_change::text,
+       left(query, 500) AS query
+FROM pg_stat_activity
+WHERE datname = $1 AND pid <> pg_backend_pid() AND backend_type = 'client backend'
+ORDER BY query_start NULLS LAST`;
+
+export const terminateBackend = `
+SELECT pg_terminate_backend(pid) AS ok
+FROM pg_stat_activity
+WHERE datname = $1 AND pid = $2 AND pid <> pg_backend_pid()`;
+
+export const databaseStats = `
+SELECT d.datname,
+       s.numbackends, s.xact_commit, s.xact_rollback, s.blks_read, s.blks_hit,
+       s.tup_returned, s.tup_fetched, s.tup_inserted, s.tup_updated, s.tup_deleted,
+       s.deadlocks, s.temp_bytes,
+       pg_database_size(d.datname) AS size_bytes
+FROM pg_database d
+JOIN pg_stat_database s ON s.datid = d.oid
+WHERE NOT d.datistemplate AND d.datname NOT IN ('postgres')`;
+
+export const hasStatStatements = `
+SELECT count(*)::int AS n FROM pg_extension WHERE extname = 'pg_stat_statements'`;
+
+export const topStatements = `
+SELECT d.datname, s.queryid::text AS queryid, left(s.query, 1000) AS query,
+       s.calls, s.total_exec_time, s.mean_exec_time, s.rows
+FROM pg_stat_statements s
+JOIN pg_database d ON d.oid = s.dbid
+WHERE d.datname NOT IN ('postgres', 'db_web_meta')
+ORDER BY s.total_exec_time DESC
+LIMIT $1`;

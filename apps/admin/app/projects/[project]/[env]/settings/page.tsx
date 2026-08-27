@@ -1,8 +1,10 @@
 import { AppShell } from "@/components/app-shell";
+import { CloneDatabaseDialog } from "@/components/clone-database-dialog";
 import { DropDatabaseDialog } from "@/components/drop-database-dialog";
 import { EnvBadge } from "@/components/env-badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
+import { parseDatabaseName } from "@/lib/projects";
 import { getDatabases } from "@/lib/queries";
 import { envPath, projectPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
@@ -13,7 +15,11 @@ export default async function SettingsPage({ params }: { params: Promise<EnvPara
   await requireSession();
   const { project, env } = await params;
   const database = resolveDatabase({ project, env });
-  const row = (await getDatabases()).find((d) => d.datname === database);
+  const databases = await getDatabases();
+  const row = databases.find((d) => d.datname === database);
+  const siblings = databases
+    .map((d) => d.datname)
+    .filter((n) => parseDatabaseName(n).project === project);
   return (
     <AppShell
       database={database}
@@ -28,6 +34,18 @@ export default async function SettingsPage({ params }: { params: Promise<EnvPara
         <EnvBadge database={database} />
       </div>
       <div className="grid gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Clone environment</CardTitle>
+            <CardDescription>
+              Copy this database, schema and data, into a new environment of{" "}
+              <code className="font-mono">{project}</code>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CloneDatabaseDialog sources={siblings} defaultSource={database} />
+          </CardContent>
+        </Card>
         <Card className="border-destructive/40">
           <CardHeader>
             <CardTitle>Drop database</CardTitle>

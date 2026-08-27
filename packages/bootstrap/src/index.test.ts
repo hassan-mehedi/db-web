@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   bootstrapProjectEnv,
+  cloneProjectEnv,
   isProdDatabase,
   isProtectedDatabase,
   isValidDatabaseName,
+  planToSql,
 } from "./index";
 
 describe("isValidDatabaseName", () => {
@@ -37,4 +39,41 @@ describe("isProtectedDatabase", () => {
     expect(isProtectedDatabase(n)).toBe(true),
   );
   it("allows project databases", () => expect(isProtectedDatabase("recipes_dev")).toBe(false));
+});
+
+describe("cloneProjectEnv", () => {
+  it("creates from template and bootstraps roles for the target", () => {
+    const plan = cloneProjectEnv({
+      source: "blog_dev",
+      target: "blog_staging",
+      authenticatorPassword: "pw",
+      sourceHasApiSchema: true,
+    });
+    expect(plan.database).toBe("blog_staging");
+    expect(plan.clusterStatements[0]).toBe('CREATE DATABASE "blog_staging" TEMPLATE "blog_dev"');
+    expect(plan.clusterStatements).toContain('CREATE ROLE "blog_staging_anon" NOLOGIN');
+    expect(plan.databaseStatements[0]).toBe(
+      'GRANT USAGE ON SCHEMA api TO "blog_staging_anon", "blog_staging_user"',
+    );
+    expect(planToSql(plan)).toContain('\\c "blog_staging"');
+  });
+  it("skips api grants when the source has no api schema", () => {
+    const plan = cloneProjectEnv({
+      source: "blog_dev",
+      target: "blog_x",
+      authenticatorPassword: "pw",
+      sourceHasApiSchema: false,
+    });
+    expect(plan.databaseStatements).toEqual([]);
+    expect(plan.clusterStatements).toHaveLength(5);
+  });
+  it("without a password only copies the database", () => {
+    const plan = cloneProjectEnv({ source: "a_dev", target: "a_test", sourceHasApiSchema: true });
+    expect(plan.clusterStatements).toEqual(['CREATE DATABASE "a_test" TEMPLATE "a_dev"']);
+  });
+  it("rejects same source and target", () => {
+    expect(() =>
+      cloneProjectEnv({ source: "a_dev", target: "a_dev", sourceHasApiSchema: false }),
+    ).toThrow();
+  });
 });

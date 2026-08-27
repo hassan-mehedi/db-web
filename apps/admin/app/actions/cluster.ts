@@ -33,6 +33,46 @@ export async function createDatabaseAction(input: {
   }
 }
 
+export async function cloneDatabaseAction(input: {
+  source: string;
+  target: string;
+  bootstrap: boolean;
+  force: boolean;
+  authenticatorPassword?: string;
+}): Promise<ActionResult> {
+  await requireSession();
+  try {
+    const plan = await cluster.planCloneDatabase(input);
+    const sql = planToSql(plan);
+    audit(
+      "clone-database",
+      input.target,
+      `${input.force ? "-- terminate source backends\n" : ""}${sql}`,
+    );
+    await cluster.cloneDatabase(plan, input.source, input.force);
+    revalidatePath("/projects");
+    return { ok: true, sql };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function previewCloneAction(input: {
+  source: string;
+  target: string;
+  bootstrap: boolean;
+  authenticatorPassword?: string;
+}): Promise<ActionResult<{ backends: number }>> {
+  await requireSession();
+  try {
+    const plan = await cluster.planCloneDatabase(input);
+    const backends = await cluster.countBackends(input.source);
+    return { ok: true, sql: planToSql(plan), data: { backends } };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 export async function dropDatabaseAction(input: {
   database: string;
   force: boolean;

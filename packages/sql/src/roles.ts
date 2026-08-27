@@ -52,3 +52,8 @@ JOIN pg_roles r ON r.oid = am.roleid
 JOIN pg_roles m ON m.oid = am.member
 WHERE r.rolname NOT LIKE 'pg\\_%'
 ORDER BY 1, 2`;
+
+export function alterRolePassword(name: string, password: string): string {
+  if (!isValidRoleName(name)) throw new Error(`invalid role name: ${name}`);
+  return `ALTER ROLE ${quoteIdent(name)} PASSWORD ${quoteLiteral(password)}`;
+}

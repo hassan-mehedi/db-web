@@ -16,6 +16,22 @@ bind to the Tailscale IP and are reachable from the tailnet only.
      sh < sql/01-app-admin.sh
    ```
 
+   The script also grants `pg_read_all_stats` to `app_admin` and creates the
+   `pg_stat_statements` extension. If the cluster already ran the old script,
+   run those two lines by hand:
+
+   ```sh
+   docker exec -i <postgres-container> psql -U <superuser> -d postgres \
+     -c "GRANT pg_read_all_stats TO app_admin" \
+     -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements"
+   ```
+
+   `pg_stat_statements` only loads after Postgres restarts with
+   `-c shared_preload_libraries=pg_stat_statements` in its command
+   (`postgres/compose.yml` has it). Redeploy the Postgres compose once for that;
+   the data volume is untouched. Without it the Monitoring page still shows
+   connections, cache hit and size, only the slow-statement table stays empty.
+
    Then the Better Auth tables:
 
    ```sh
@@ -31,6 +47,10 @@ bind to the Tailscale IP and are reachable from the tailnet only.
    | `TAILSCALE_HOSTNAME` | from `tailscale status`, e.g. `vps` |
    | `APP_ADMIN_PASSWORD` | same as step 2 |
    | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
+
+   `TAILSCALE_HOSTNAME` also feeds the Connect page and the sidebar's Backups
+   link (`http://<hostname>:4005`). `METRICS_SAMPLER=off` disables the
+   once-a-minute stats sampler if you ever run more than one replica.
 
    No domain. Deploy. Then seed the single user. The seed script needs
    `tsx`, which is not in the runtime image, so run it from your laptop

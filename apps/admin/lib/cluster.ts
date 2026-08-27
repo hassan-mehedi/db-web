@@ -1,6 +1,7 @@
 import {
   type BootstrapPlan,
   bootstrapProjectEnv,
+  cloneProjectEnv,
   createDatabasePlan,
   isProtectedDatabase,
   isValidDatabaseName,
@@ -61,6 +62,53 @@ export async function createDatabase(plan: BootstrapPlan, database: string) {
       throw err;
     }
   });
+}
+
+export async function sourceHasApiSchema(database: string): Promise<boolean> {
+  return withClient(database, async (c) => {
+    const { rowCount } = await c.query("SELECT 1 FROM pg_namespace WHERE nspname = 'api'");
+    return (rowCount ?? 0) > 0;
+  });
+}
+
+export async function countBackends(database: string): Promise<number> {
+  await closePool(database);
+  const { rows } = await maintenancePool().query<{ n: number }>(
+    "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+    [database],
+  );
+  return rows[0]?.n ?? 0;
+}
+
+export async function planCloneDatabase(input: {
+  source: string;
+  target: string;
+  bootstrap: boolean;
+  authenticatorPassword?: string;
+}): Promise<BootstrapPlan> {
+  if (!isValidDatabaseName(input.source)) throw new Error("invalid source database name");
+  if (!isValidDatabaseName(input.target)) throw new Error("invalid target database name");
+  if (isProtectedDatabase(input.source) || isProtectedDatabase(input.target)) {
+    throw new Error("reserved database name");
+  }
+  if (input.bootstrap && !input.authenticatorPassword) {
+    throw new Error("authenticator password required");
+  }
+  return cloneProjectEnv({
+    source: input.source,
+    target: input.target,
+    sourceHasApiSchema: input.bootstrap ? await sourceHasApiSchema(input.source) : false,
+    ...(input.bootstrap && input.authenticatorPassword
+      ? { authenticatorPassword: input.authenticatorPassword }
+      : {}),
+  });
+}
+
+export async function cloneDatabase(plan: BootstrapPlan, source: string, force: boolean) {
+  await closePool(source);
+  const pool = maintenancePool();
+  if (force) await pool.query(terminateBackends, [source]);
+  await createDatabase(plan, plan.database);
 }
 
 export async function dropDatabase(database: string, force: boolean) {
