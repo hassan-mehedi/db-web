@@ -3,6 +3,7 @@ import { alterColumns, createTable } from "@db-web/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDatabase, dropDatabase, planCreateDatabase } from "../lib/cluster";
 import { deleteRows, insertRow, updateRow } from "../lib/dml";
+import { getTableData } from "../lib/queries";
 import { runQuery } from "../lib/run-query";
 
 const url = process.env.DATABASE_URL_MAINTENANCE;
@@ -115,6 +116,44 @@ suite("cluster + schema + dml against a real Postgres", () => {
     const upd = await runQuery(DB, "insert into api.posts (title) values ('x')", 100);
     expect(upd.command).toBe("INSERT");
     expect(upd.rowCount).toBe(1);
+  });
+
+  it("pages by primary key and estimates the count", async () => {
+    await withClient(DB, (c) =>
+      c.query(`CREATE TABLE api.nums (id int PRIMARY KEY, v text);
+               INSERT INTO api.nums SELECT g, 'v' || g FROM generate_series(1, 120) g;
+               CREATE TABLE api.heap (v int);
+               INSERT INTO api.heap SELECT g FROM generate_series(1, 60) g;
+               ANALYZE api.nums`),
+    );
+    const p1 = await getTableData(DB, "api", "nums");
+    expect(p1.rows.length).toBe(50);
+    expect(p1.rows[0]?.[0]).toBe("1");
+    expect(p1.hasNext).toBe(true);
+    expect(p1.hasPrev).toBe(false);
+    expect(p1.estimated).toBe(true);
+    expect(p1.total).toBe(120);
+    expect(p1.columns).toEqual(["id", "v"]);
+
+    const p2 = await getTableData(DB, "api", "nums", { after: p1.lastKey ?? undefined });
+    expect(p2.rows[0]?.[0]).toBe("51");
+    expect(p2.hasPrev).toBe(true);
+    const p3 = await getTableData(DB, "api", "nums", { after: p2.lastKey ?? undefined });
+    expect(p3.rows.length).toBe(20);
+    expect(p3.hasNext).toBe(false);
+    const back = await getTableData(DB, "api", "nums", { before: p3.firstKey ?? undefined });
+    expect(back.rows[0]?.[0]).toBe("51");
+    expect(back.rows.at(-1)?.[0]).toBe("100");
+
+    const exact = await getTableData(DB, "api", "nums", { exact: true });
+    expect(exact.estimated).toBe(false);
+    expect(exact.total).toBe(120);
+
+    const heap = await getTableData(DB, "api", "heap", { page: 1 });
+    expect(heap.primaryKey).toEqual([]);
+    expect(heap.rows.length).toBe(10);
+    expect(heap.hasPrev).toBe(true);
+    expect(heap.hasNext).toBe(false);
   });
 
   it("drops the database, forcing disconnects", async () => {

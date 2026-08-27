@@ -88,33 +88,111 @@ JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
 WHERE i.indrelid = $1::regclass AND i.indisprimary
 ORDER BY array_position(i.indkey, a.attnum)`;
 
+export interface TableDataOptions {
+  after?: string[] | undefined;
+  before?: string[] | undefined;
+  page?: number | undefined;
+  exact?: boolean | undefined;
+}
+
+export interface TableData {
+  columns: string[];
+  rows: Cell[][];
+  primaryKey: string[];
+  total: number | null;
+  estimated: boolean;
+  hasNext: boolean;
+  hasPrev: boolean;
+  firstKey: string[] | null;
+  lastKey: string[] | null;
+}
+
 export async function getTableData(
   database: string,
   schema: string,
   table: string,
-  page: number,
-): Promise<{ columns: string[]; rows: Cell[][]; total: number; primaryKey: string[] }> {
+  opts: TableDataOptions = {},
+): Promise<TableData> {
   return timed("table-data", () =>
     withClient(database, async (c) => {
       const rel = quoteQualified(schema, table);
       const pk = (await c.query<{ attname: string }>(primaryKeyColumns, [rel])).rows.map(
         (r) => r.attname,
       );
-      const orderBy = pk.length ? `ORDER BY ${pk.map(quoteIdent).join(", ")}` : "";
+      const countSql = opts.exact
+        ? `SELECT count(*)::text AS n FROM ${rel}`
+        : "SELECT reltuples::bigint::text AS n FROM pg_class WHERE oid = $1::regclass";
+      const countPromise = c.query<{ n: string }>(countSql, opts.exact ? [] : [rel]);
+
+      if (pk.length === 0) {
+        const page = opts.page ?? 0;
+        const [data, count] = await Promise.all([
+          c.query({
+            text: `SELECT * FROM ${rel} LIMIT $1 OFFSET $2`,
+            values: [PAGE_SIZE + 1, page * PAGE_SIZE],
+            rowMode: "array",
+          }),
+          countPromise,
+        ]);
+        const rows = data.rows as unknown[][];
+        return {
+          columns: data.fields.map((f) => f.name),
+          rows: formatRows(rows.slice(0, PAGE_SIZE)),
+          primaryKey: pk,
+          total: totalOf(count.rows[0]?.n, opts.exact),
+          estimated: !opts.exact,
+          hasNext: rows.length > PAGE_SIZE,
+          hasPrev: page > 0,
+          firstKey: null,
+          lastKey: null,
+        };
+      }
+
+      const keyCols = pk.map(quoteIdent).join(", ");
+      const cursor = opts.after ?? opts.before;
+      const backwards = !opts.after && !!opts.before;
+      const params: unknown[] = [PAGE_SIZE + 1];
+      let where = "";
+      if (cursor && cursor.length === pk.length) {
+        const placeholders = cursor.map((_, i) => `$${i + 2}`).join(", ");
+        where = `WHERE (${keyCols}) ${backwards ? "<" : ">"} (${placeholders})`;
+        params.push(...cursor);
+      }
+      const keyText = pk.map((k, i) => `${quoteIdent(k)}::text AS __k${i}`).join(", ");
+      const order = `ORDER BY ${pk.map((k) => `${quoteIdent(k)}${backwards ? " DESC" : ""}`).join(", ")}`;
       const [data, count] = await Promise.all([
         c.query({
-          text: `SELECT * FROM ${rel} ${orderBy} LIMIT $1 OFFSET $2`,
-          values: [PAGE_SIZE, page * PAGE_SIZE],
+          text: `SELECT t.*, ${keyText} FROM ${rel} t ${where} ${order} LIMIT $1`,
+          values: params,
           rowMode: "array",
         }),
-        c.query<{ n: string }>(`SELECT count(*)::text AS n FROM ${rel}`),
+        countPromise,
       ]);
+      const width = data.fields.length - pk.length;
+      let rows = data.rows as unknown[][];
+      const more = rows.length > PAGE_SIZE;
+      rows = rows.slice(0, PAGE_SIZE);
+      if (backwards) rows.reverse();
+      const keyOf = (row: unknown[]) => row.slice(width).map((v) => String(v));
+      const first = rows[0];
+      const last = rows.at(-1);
       return {
-        columns: data.fields.map((f) => f.name),
-        rows: formatRows(data.rows as unknown[][]),
-        total: Number(count.rows[0]?.n ?? 0),
+        columns: data.fields.slice(0, width).map((f) => f.name),
+        rows: formatRows(rows.map((r) => r.slice(0, width))),
         primaryKey: pk,
+        total: totalOf(count.rows[0]?.n, opts.exact),
+        estimated: !opts.exact,
+        hasNext: backwards ? true : more,
+        hasPrev: backwards ? more : !!opts.after,
+        firstKey: first ? keyOf(first) : null,
+        lastKey: last ? keyOf(last) : null,
       };
     }),
   );
+}
+
+function totalOf(n: string | undefined, exact: boolean | undefined): number | null {
+  const v = Number(n ?? -1);
+  if (exact) return Math.max(0, v);
+  return v < 0 ? null : v;
 }

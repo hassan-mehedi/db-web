@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
 import { envLabel } from "@/lib/projects";
-import { getSchemasWithTables, getTableData, getTableDetails, PAGE_SIZE } from "@/lib/queries";
+import { getSchemasWithTables, getTableData, getTableDetails } from "@/lib/queries";
 import { envPath, projectPath, tablePath, tablesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 
@@ -38,7 +38,13 @@ export default async function TablePage({
   searchParams,
 }: {
   params: Promise<EnvParams & { schema: string; table: string }>;
-  searchParams: Promise<{ tab?: string; page?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    page?: string;
+    after?: string;
+    before?: string;
+    count?: string;
+  }>;
 }) {
   await requireSession();
   const { project, env, schema, table } = await params;
@@ -47,12 +53,27 @@ export default async function TablePage({
   const tab: Tab = TABS.includes(sp.tab as Tab) ? (sp.tab as Tab) : "data";
   const page = Math.max(0, Number(sp.page ?? 0) || 0);
   const base = tablePath(database, schema, table);
+  const exact = sp.count === "exact";
+  const dataQuery = (extra: Record<string, string | undefined>) => {
+    const q = new URLSearchParams({ tab: "data" });
+    if (exact) q.set("count", "exact");
+    for (const [k, v] of Object.entries(extra)) if (v !== undefined) q.set(k, v);
+    return `${base}?${q}`;
+  };
 
   const [details, schemas] = await Promise.all([
     getTableDetails(database, schema, table),
     getSchemasWithTables(database),
   ]);
-  const data = tab === "data" ? await getTableData(database, schema, table, page) : null;
+  const data =
+    tab === "data"
+      ? await getTableData(database, schema, table, {
+          page,
+          after: parseCursor(sp.after),
+          before: parseCursor(sp.before),
+          exact,
+        })
+      : null;
   const allTables = schemas.flatMap((s) =>
     s.tables.map((t) => ({ schema: s.schema, table: t.relname })),
   );
@@ -97,19 +118,48 @@ export default async function TablePage({
           />
           <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
             <span>
-              {data.total === 0
-                ? "0 rows"
-                : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, data.total)} of ${data.total}`}
+              {data.rows.length} rows shown
+              {data.total !== null && (
+                <>
+                  {" · "}
+                  {data.estimated ? "~" : ""}
+                  {data.total.toLocaleString()} total
+                </>
+              )}
+              {data.estimated && (
+                <>
+                  {" "}
+                  <Link
+                    href={dataQuery({ after: sp.after, before: sp.before, page: sp.page })}
+                    className="text-primary"
+                  >
+                    count exactly
+                  </Link>
+                </>
+              )}
             </span>
-            <Button asChild size="sm" variant="outline" disabled={page === 0}>
-              <Link href={`${base}?tab=data&page=${page - 1}`} aria-disabled={page === 0}>
+            <Button asChild size="sm" variant="outline" disabled={!data.hasPrev}>
+              <Link
+                href={
+                  data.primaryKey.length
+                    ? dataQuery({
+                        before: data.firstKey ? JSON.stringify(data.firstKey) : undefined,
+                      })
+                    : dataQuery({ page: String(Math.max(0, page - 1)) })
+                }
+                aria-disabled={!data.hasPrev}
+              >
                 Prev
               </Link>
             </Button>
-            <Button asChild size="sm" variant="outline">
+            <Button asChild size="sm" variant="outline" disabled={!data.hasNext}>
               <Link
-                href={`${base}?tab=data&page=${page + 1}`}
-                aria-disabled={(page + 1) * PAGE_SIZE >= data.total}
+                href={
+                  data.primaryKey.length
+                    ? dataQuery({ after: data.lastKey ? JSON.stringify(data.lastKey) : undefined })
+                    : dataQuery({ page: String(page + 1) })
+                }
+                aria-disabled={!data.hasNext}
               >
                 Next
               </Link>
@@ -195,4 +245,14 @@ export default async function TablePage({
       )}
     </TablesLayout>
   );
+}
+
+function parseCursor(raw: string | undefined): string[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const v: unknown = JSON.parse(raw);
+    return Array.isArray(v) && v.every((x) => typeof x === "string") ? v : undefined;
+  } catch {
+    return undefined;
+  }
 }
