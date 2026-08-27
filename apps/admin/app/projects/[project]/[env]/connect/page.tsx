@@ -2,6 +2,7 @@ import { AppShell } from "@/components/app-shell";
 import { ConnectPanel } from "@/components/connect-panel";
 import { connectInfo } from "@/lib/connect";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
+import { envLabel } from "@/lib/projects";
 import { envPath, projectPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 
@@ -17,7 +18,7 @@ export default async function ConnectPage({ params }: { params: Promise<EnvParam
       database={database}
       crumbs={[
         { label: project, href: projectPath(project) },
-        { label: env, href: envPath(database) },
+        { label: envLabel(env), href: envPath(database) },
         { label: "connect" },
       ]}
     >

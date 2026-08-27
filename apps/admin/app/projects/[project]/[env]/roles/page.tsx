@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { getRoles } from "@/lib/cluster";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
+import { envLabel } from "@/lib/projects";
 import { envPath, projectPath, rolesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 
@@ -52,7 +53,7 @@ export default async function EnvRolesPage({
       database={database}
       crumbs={[
         { label: project, href: projectPath(project) },
-        { label: env, href: envPath(database) },
+        { label: envLabel(env), href: envPath(database) },
         { label: "roles" },
       ]}
       actions={<CreateRoleDialog />}

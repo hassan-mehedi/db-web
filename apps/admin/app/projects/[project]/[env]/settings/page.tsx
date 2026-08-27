@@ -4,7 +4,7 @@ import { DropDatabaseDialog } from "@/components/drop-database-dialog";
 import { EnvBadge } from "@/components/env-badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
-import { parseDatabaseName } from "@/lib/projects";
+import { envLabel, parseDatabaseName } from "@/lib/projects";
 import { getDatabases } from "@/lib/queries";
 import { envPath, projectPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
@@ -25,7 +25,7 @@ export default async function SettingsPage({ params }: { params: Promise<EnvPara
       database={database}
       crumbs={[
         { label: project, href: projectPath(project) },
-        { label: env, href: envPath(database) },
+        { label: envLabel(env), href: envPath(database) },
         { label: "settings" },
       ]}
     >

@@ -20,13 +20,19 @@ describe("parseDatabaseName", () => {
       database: "my_app_prod",
     });
   });
-  it("keeps names without an underscore as a project with empty env", () => {
-    expect(parseDatabaseName("legacy")).toEqual({ project: "legacy", env: "", database: "legacy" });
+  it("gives names without an underscore the NO_ENV marker", () => {
+    expect(parseDatabaseName("legacy")).toEqual({
+      project: "legacy",
+      env: "-",
+      database: "legacy",
+    });
     expect(parseDatabaseName("trailing_")).toEqual({
       project: "trailing_",
-      env: "",
+      env: "-",
       database: "trailing_",
     });
+    expect(databaseName("legacy", "-")).toBe("legacy");
+    expect(envPath("legacy")).toBe("/projects/legacy/-");
   });
   it("round-trips with databaseName", () => {
     const { project, env } = parseDatabaseName("shop_staging");
@@ -38,6 +44,7 @@ describe("isValidProjectEnv", () => {
   it("accepts lowercase project and env", () => {
     expect(isValidProjectEnv("blog", "dev")).toBe(true);
     expect(isValidProjectEnv("shop2", "prod")).toBe(true);
+    expect(isValidProjectEnv("legacy", "-")).toBe(true);
   });
   it("rejects bad parts", () => {
     expect(isValidProjectEnv("Blog", "dev")).toBe(false);
@@ -45,6 +52,7 @@ describe("isValidProjectEnv", () => {
     expect(isValidProjectEnv("blog", "de_v")).toBe(false);
     expect(isValidProjectEnv("1blog", "dev")).toBe(false);
     expect(isValidProjectEnv("my_app", "dev")).toBe(false);
+    expect(isValidProjectEnv("trailing_", "-")).toBe(false);
   });
 });
 

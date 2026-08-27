@@ -4,6 +4,7 @@ import { CreateTableDialog } from "@/components/create-table-dialog";
 import { EnvBadge } from "@/components/env-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
+import { envLabel } from "@/lib/projects";
 import { getDatabases, getSchemasWithTables } from "@/lib/queries";
 import { projectPath, tablePath, tablesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
@@ -21,7 +22,7 @@ export default async function EnvOverview({ params }: { params: Promise<EnvParam
   return (
     <AppShell
       database={database}
-      crumbs={[{ label: project, href: projectPath(project) }, { label: env }]}
+      crumbs={[{ label: project, href: projectPath(project) }, { label: envLabel(env) }]}
       actions={<CreateTableDialog database={database} schemas={schemas.map((s) => s.schema)} />}
     >
       <div className="mb-6 flex items-center gap-3">

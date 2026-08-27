@@ -20,6 +20,7 @@ import {
   WINDOWS,
   type Window,
 } from "@/lib/metrics";
+import { envLabel } from "@/lib/projects";
 import { envPath, monitoringPath, projectPath, queryPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -61,7 +62,7 @@ export default async function MonitoringPage({
       database={database}
       crumbs={[
         { label: project, href: projectPath(project) },
-        { label: env, href: envPath(database) },
+        { label: envLabel(env), href: envPath(database) },
         { label: "monitoring" },
       ]}
     >

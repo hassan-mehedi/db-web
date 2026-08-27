@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
+import { envLabel } from "@/lib/projects";
 import { cn } from "@/lib/utils";
 import { EnvBadge } from "./env-badge";
 import { SignOutButton } from "./sign-out-button";
@@ -234,7 +235,7 @@ function ProjectSwitcher({ projects, current }: Pick<SidebarProps, "projects" | 
                   : "border-sidebar-border text-sidebar-foreground hover:bg-sidebar-accent",
               )}
             >
-              {e.env}
+              {envLabel(e.env)}
             </Link>
           ))}
         </div>

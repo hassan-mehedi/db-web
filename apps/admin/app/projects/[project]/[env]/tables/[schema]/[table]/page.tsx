@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
+import { envLabel } from "@/lib/projects";
 import { getSchemasWithTables, getTableData, getTableDetails, PAGE_SIZE } from "@/lib/queries";
 import { envPath, projectPath, tablePath, tablesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
@@ -65,7 +66,7 @@ export default async function TablePage({
       selected={{ schema, table }}
       crumbs={[
         { label: project, href: projectPath(project) },
-        { label: env, href: envPath(database) },
+        { label: envLabel(env), href: envPath(database) },
         { label: "tables", href: tablesPath(database) },
         { label: `${schema}.${table}` },
       ]}

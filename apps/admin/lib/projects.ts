@@ -6,21 +6,30 @@ export interface ProjectEnv {
   database: string;
 }
 
+export const NO_ENV = "-";
+
+const PROJECT_PATTERN = /^[a-z][a-z0-9]*$/;
+
 export function parseDatabaseName(database: string): ProjectEnv {
   const i = database.lastIndexOf("_");
   if (i <= 0 || i === database.length - 1) {
-    return { project: database, env: "", database };
+    return { project: database, env: NO_ENV, database };
   }
   return { project: database.slice(0, i), env: database.slice(i + 1), database };
 }
 
 export function databaseName(project: string, env: string): string {
-  return `${project}_${env}`;
+  return env === NO_ENV ? project : `${project}_${env}`;
+}
+
+export function envLabel(env: string): string {
+  return env === NO_ENV ? "no env" : env;
 }
 
 export function isValidProjectEnv(project: string, env: string): boolean {
+  if (env === NO_ENV) return PROJECT_PATTERN.test(project);
   return (
-    /^[a-z][a-z0-9]*$/.test(project) &&
+    PROJECT_PATTERN.test(project) &&
     /^[a-z0-9]+$/.test(env) &&
     isValidDatabaseName(databaseName(project, env))
   );

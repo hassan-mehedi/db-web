@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { SqlEditor } from "@/components/sql-editor";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
+import { envLabel } from "@/lib/projects";
 import { listHistory } from "@/lib/query-history";
 import { envPath, projectPath } from "@/lib/routes";
 import { listSavedQueries } from "@/lib/saved-queries";
@@ -25,7 +26,7 @@ export default async function QueryPage({
       database={database}
       crumbs={[
         { label: project, href: projectPath(project) },
-        { label: env, href: envPath(database) },
+        { label: envLabel(env), href: envPath(database) },
         { label: "query" },
       ]}
     >
