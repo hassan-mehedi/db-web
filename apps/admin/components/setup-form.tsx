@@ -45,7 +45,7 @@ export function SetupForm() {
         </CardHeader>
         <CardContent>
           {!enrolled ? (
-            <form onSubmit={onCreate} className="grid gap-4">
+            <form key="create" onSubmit={onCreate} className="grid gap-4">
               <p className="text-sm text-muted-foreground">
                 This is the only account. Two-factor with an authenticator app is required.
               </p>
@@ -70,7 +70,7 @@ export function SetupForm() {
               </Button>
             </form>
           ) : (
-            <form onSubmit={onVerify} className="grid gap-4">
+            <form key="verify" onSubmit={onVerify} className="grid gap-4">
               <div className="grid gap-2 sm:grid-cols-[220px_1fr]">
                 {/* biome-ignore lint/performance/noImgElement: data URL, nothing to optimise */}
                 <img src={enrolled.qr} alt="TOTP QR code" width={220} height={220} />

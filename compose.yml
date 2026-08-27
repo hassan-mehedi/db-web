@@ -1,0 +1,47 @@
+# Standalone install: Postgres plus the admin app. install.sh writes .env.
+# Both ports bind to BIND_IP (default 127.0.0.1). Set it to a Tailscale IP to
+# reach the app from your tailnet, never to 0.0.0.0 without TLS in front.
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c max_connections=${PG_MAX_CONNECTIONS:-100}
+      -c shared_buffers=${PG_SHARED_BUFFERS:-256MB}
+      -c effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-768MB}
+      -c work_mem=${PG_WORK_MEM:-8MB}
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in .env}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:?set in .env}
+    ports:
+      - "${BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  admin:
+    image: ${DB_WEB_IMAGE:-ghcr.io/hassan-mehedi/db-web-admin:latest}
+    restart: unless-stopped
+    mem_limit: 512m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${BIND_IP:-127.0.0.1}:${ADMIN_PORT:-3100}:3000"
+    environment:
+      DATABASE_URL_MAINTENANCE: postgres://app_admin:${APP_ADMIN_PASSWORD}@postgres:5432/postgres
+      DATABASE_URL_META: postgres://app_admin:${APP_ADMIN_PASSWORD}@postgres:5432/db_web_meta
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set in .env}
+      BETTER_AUTH_URL: ${DB_WEB_URL:-http://${BIND_IP:-127.0.0.1}:${ADMIN_PORT:-3100}}
+      TAILSCALE_HOSTNAME: ${TAILSCALE_HOSTNAME:-}
+      BACKUPS_URL: ${BACKUPS_URL:-}
+
+volumes:
+  pgdata:
