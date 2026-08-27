@@ -54,6 +54,17 @@ carry the numbers.
 - `/api/health` route and a Docker `HEALTHCHECK`.
 - Runner stage keeps only the standalone output; `mem_limit` in the admin compose.
 
+## Status 2026-08-27
+
+All phases built on `dev`. Notes:
+- Image stays at 306 MB: 172 MB is the `node:26-alpine` base layer, the app is 46 MB.
+  Excluding sharp via `outputFileTracingExcludes` did not take effect with the pnpm
+  store layout, so it was dropped.
+- Render log lines look like
+  `{"action":"render","path":"/e2e/dev/monitoring","total_ms":6,"session_ms":2,"series_ms":3,...}`.
+- Verified: lint, typecheck, sql 71, bootstrap 21, admin 15 (incl. paging and sampler
+  integration tests), Playwright 2, Docker HEALTHCHECK reports healthy.
+
 ## Out of scope
 Anything that adds a feature (backups, migrations, alerts, audit page, API keys).
 Those are listed for v4 in the session notes.
