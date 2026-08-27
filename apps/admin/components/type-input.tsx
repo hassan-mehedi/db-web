@@ -15,6 +15,7 @@ export function TypeInput({
   id,
   className,
   placeholder,
+  suggestions = COMMON_TYPES,
 }: {
   database: string;
   value: string;
@@ -22,6 +23,7 @@ export function TypeInput({
   id?: string;
   className?: string;
   placeholder?: string;
+  suggestions?: readonly string[];
 }) {
   const listId = useId();
   const [status, setStatus] = useState<Status>({ state: "idle" });
@@ -63,7 +65,7 @@ export function TypeInput({
         autoComplete="off"
       />
       <datalist id={listId}>
-        {COMMON_TYPES.map((t) => (
+        {suggestions.map((t) => (
           <option key={t} value={t} />
         ))}
       </datalist>

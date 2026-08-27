@@ -105,6 +105,8 @@ export function alterColumn(schema: string, table: string, change: ColumnChange)
     case "rename":
       return `ALTER TABLE ${rel} RENAME COLUMN ${quoteIdent(change.column)} TO ${quoteIdent(change.to)}`;
     case "type": {
+      if (/\bgenerated\b/i.test(change.type))
+        throw new Error("identity cannot be set with ALTER COLUMN TYPE");
       const using = change.using ? ` USING ${expression(change.using)}` : "";
       return `ALTER TABLE ${rel} ALTER COLUMN ${quoteIdent(change.column)} TYPE ${type(change.type)}${using}`;
     }

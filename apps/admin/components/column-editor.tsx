@@ -382,7 +382,11 @@ function EditColumnDialog({
               />
               <Button
                 variant="outline"
-                disabled={!isValidType(type) || (using !== "" && !isSafeExpression(using))}
+                disabled={
+                  !isValidType(type) ||
+                  /\bgenerated\b/i.test(type) ||
+                  (using !== "" && !isSafeExpression(using))
+                }
                 onClick={() =>
                   onChange({ kind: "type", column: name, type, ...(using ? { using } : {}) })
                 }

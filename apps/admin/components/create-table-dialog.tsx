@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CREATE_TYPES } from "@/lib/pg-types";
 import type { CompletionSchema } from "@/lib/queries";
 import { tablePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -173,6 +174,7 @@ export function CreateTableDialog({
                     database={database}
                     value={r.type}
                     onChange={(type) => update(i, { type })}
+                    suggestions={CREATE_TYPES}
                   />
                   <Input
                     className="font-mono"
