@@ -54,3 +54,20 @@ VPS with one command. Features wait for v5.
 
 Backups in-app, data grid filters and CSV export, schema diff, alerts, audit log,
 API keys. Those are v5.
+
+## Status 2026-08-27
+
+All three phases built on `dev`.
+
+- V4-A `e4ab9fd`. Playwright `setup` project creates the user through `/setup`,
+  then `smoke` logs in with it. Fresh Docker install redirects `/login` to
+  `/setup`, QR and backup codes render from the standalone image.
+- V4-B `7f185ab`. `install.sh` tested locally with `DB_WEB_SOURCE` and a local
+  image on ports 3101/5437: both containers healthy, `/api/health` 200. The
+  ghcr.io publish workflow runs on the next push to `dev`; the root
+  `compose.yml` pulls `:latest`, which only exists after the first `v*` tag.
+  Until then set `DB_WEB_IMAGE=ghcr.io/hassan-mehedi/db-web-admin:dev`.
+- V4-C. Headers checked with `curl -I` against the standalone server.
+
+Open: LICENSE names the GitHub handle as copyright holder, change if you want
+your full name. Cut a `v4.0.0` tag so `:latest` exists.
