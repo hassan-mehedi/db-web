@@ -16,6 +16,10 @@ export default defineConfig({
   timeout: 60_000,
   retries: 0,
   workers: 1,
+  projects: [
+    { name: "setup", testMatch: /setup\.spec\.ts/ },
+    { name: "smoke", testMatch: /smoke\.spec\.ts/, dependencies: ["setup"] },
+  ],
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     screenshot: "only-on-failure",

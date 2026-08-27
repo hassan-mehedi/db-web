@@ -5,6 +5,7 @@ import { legacyRedirect } from "@/lib/routes";
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasCookie = Boolean(getSessionCookie(request));
+  if (pathname === "/setup") return NextResponse.next();
   if (pathname.startsWith("/login")) {
     return hasCookie && pathname === "/login"
       ? NextResponse.redirect(new URL("/projects", request.url))

@@ -32,12 +32,6 @@ bind to the Tailscale IP and are reachable from the tailnet only.
    the data volume is untouched. Without it the Monitoring page still shows
    connections, cache hit and size, only the slow-statement table stays empty.
 
-   Then the Better Auth tables:
-
-   ```sh
-   docker exec -i <postgres-container> psql -U app_admin -d db_web_meta < sql/better-auth-schema.sql
-   ```
-
 3. Admin app. Dokploy → Compose → point at this repo, compose path
    `infra/admin/compose.yml`, branch `dev`. Env:
 
@@ -52,22 +46,11 @@ bind to the Tailscale IP and are reachable from the tailnet only.
    link (`http://<hostname>:4005`). `METRICS_SAMPLER=off` disables the
    once-a-minute stats sampler if you ever run more than one replica.
 
-   No domain. Deploy. Then seed the single user. The seed script needs
-   `tsx`, which is not in the runtime image, so run it from your laptop
-   against the VPS database over an SSH tunnel:
+   No domain. Deploy.
 
-   ```sh
-   ssh -L 15432:<postgres-container-ip>:5432 vps
-   DATABASE_URL_META=postgres://app_admin:<pw>@localhost:15432/db_web_meta \
-   BETTER_AUTH_SECRET=<same as Dokploy> \
-   BETTER_AUTH_URL=http://<hostname>:3100 \
-   pnpm --filter admin seed:admin
-   ```
-
-   `BETTER_AUTH_SECRET` must match the deployed value: the TOTP secret is
-   encrypted with it.
-
-4. Open `http://<hostname>:3100` from a tailnet device. Log in, TOTP, done.
+4. Open `http://<hostname>:3100` from a tailnet device. The first visit shows
+   `/setup`: pick an email and password, scan the TOTP QR code, store the backup
+   codes. The app creates its own tables in `db_web_meta` on boot.
 
 5. Databasus. Dokploy → Compose → `infra/databasus/compose.yml`, env
    `TAILSCALE_IP`. Open `http://<hostname>:4005`, add the Postgres connection

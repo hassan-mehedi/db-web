@@ -1,4 +1,5 @@
 import pg from "pg";
+import { AUTH_SCHEMA } from "./auth-schema";
 
 let pool: pg.Pool | null = null;
 let ready: Promise<void> | null = null;
@@ -75,7 +76,7 @@ export function metaPool(): pg.Pool {
 export function ensureMetaSchema(): Promise<void> {
   if (!ready) {
     ready = metaPool()
-      .query(SCHEMA)
+      .query(AUTH_SCHEMA + SCHEMA)
       .then(() => undefined)
       .catch((err) => {
         ready = null;
