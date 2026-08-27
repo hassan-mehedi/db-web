@@ -1,11 +1,13 @@
 "use client";
 
+import type { Filter, Sort } from "@db-web/sql";
 import { Plus, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import { deleteRowsAction, updateRowsAction } from "@/app/actions/data";
+import { FilterBar } from "@/components/filter-bar";
 import { FormError } from "@/components/form-error";
-import { Grid, type GridColumn } from "@/components/grid";
+import { Grid, type GridColumn, type GridSort } from "@/components/grid";
 import { InsertRowDialog } from "@/components/insert-row-dialog";
 import { PendingChangesBar } from "@/components/pending-changes-bar";
 import { SqlPreview } from "@/components/sql-preview";
@@ -20,19 +22,35 @@ import {
 } from "@/components/ui/dialog";
 import type { Rel, RowChange, RowKey } from "@/lib/dml";
 import type { Cell } from "@/lib/format";
-import type { ColumnRow } from "@/lib/queries";
+import type { ColumnRow, ForeignKeyRow } from "@/lib/queries";
+import { tablePath } from "@/lib/routes";
+import { recordQuery, serializeFilters, serializeSort } from "@/lib/table-filters";
 import { usePendingEdits } from "@/lib/use-pending-edits";
 
 interface Props {
   rel: Rel;
   columns: string[];
   columnMeta: ColumnRow[];
+  foreignKeys: ForeignKeyRow[];
   rows: Cell[][];
   primaryKey: string[];
+  filters: Filter[];
+  sort: Sort | null;
 }
 
-export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) {
+export function DataGrid({
+  rel,
+  columns,
+  columnMeta,
+  foreignKeys,
+  rows,
+  primaryKey,
+  filters,
+  sort,
+}: Props) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const editable = primaryKey.length > 0;
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [inserting, setInserting] = useState(false);
@@ -50,12 +68,42 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
   const onSaved = useCallback(() => router.refresh(), [router]);
   const edits = usePendingEdits({ rel, rows, columnName, keyOf, apply, onSaved });
 
-  const defs: GridColumn[] = columns.map((name) => ({
-    name,
-    type: columnMeta.find((m) => m.column_name === name)?.data_type,
-    primaryKey: primaryKey.includes(name),
-    editable,
-  }));
+  function navigate(next: { filters: Filter[]; sort: Sort | null }) {
+    const q = new URLSearchParams(searchParams);
+    for (const k of ["page", "after", "before", "f", "s"]) q.delete(k);
+    q.set("tab", "data");
+    const f = serializeFilters(next.filters);
+    const s = serializeSort(next.sort);
+    if (f) q.set("f", f);
+    if (s) q.set("s", s);
+    router.push(`${pathname}?${q}`);
+  }
+
+  const gridSort: GridSort = sort ? { col: columns.indexOf(sort.column), desc: sort.desc } : null;
+  const onSort = (next: GridSort) =>
+    navigate({
+      filters,
+      sort: next ? { column: columns[next.col] ?? "", desc: next.desc } : null,
+    });
+
+  const defs: GridColumn[] = columns.map((name) => {
+    const fk = foreignKeys.find((k) => k.column === name);
+    return {
+      name,
+      type: columnMeta.find((m) => m.column_name === name)?.data_type,
+      primaryKey: primaryKey.includes(name),
+      editable,
+      linkTo: fk ? `${fk.refSchema}.${fk.refTable}` : undefined,
+    };
+  });
+  const linkFor = useCallback(
+    (col: number, value: string) => {
+      const fk = foreignKeys.find((k) => k.column === columns[col]);
+      if (!fk) return null;
+      return `${tablePath(rel.database, fk.refSchema, fk.refTable)}?${recordQuery(fk.refColumn, value)}`;
+    },
+    [foreignKeys, columns, rel.database],
+  );
 
   function remove() {
     setError(null);
@@ -98,6 +146,11 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
           </span>
         )}
       </div>
+      <FilterBar
+        columns={columns}
+        filters={filters}
+        onChange={(next) => navigate({ filters: next, sort })}
+      />
       <FormError error={error} mono />
       <PendingChangesBar
         count={edits.edits.size}
@@ -110,6 +163,10 @@ export function DataGrid({ rel, columns, columnMeta, rows, primaryKey }: Props) 
       <Grid
         columns={defs}
         rows={rows}
+        sortable
+        sort={gridSort}
+        onSort={onSort}
+        linkFor={linkFor}
         {...(editable
           ? { selected, onSelect: setSelected, edits: edits.edits, onEdit: edits.edit }
           : {})}

@@ -64,6 +64,25 @@ describe("createTable", () => {
       createTable({ schema: "s", name: "t", columns: [c], primaryKey: ["b"] }),
     ).toThrow();
   });
+  it("adds inline references", () =>
+    expect(
+      createTable({
+        schema: "api",
+        name: "comments",
+        columns: [
+          { name: "id", type: "bigint", nullable: false },
+          {
+            name: "post_id",
+            type: "bigint",
+            nullable: false,
+            references: { schema: "api", table: "posts", column: "id", onDelete: "CASCADE" },
+          },
+        ],
+        primaryKey: ["id"],
+      }),
+    ).toBe(
+      `CREATE TABLE "api"."comments" (\n  "id" bigint NOT NULL,\n  "post_id" bigint NOT NULL REFERENCES "api"."posts" ("id") ON DELETE CASCADE,\n  PRIMARY KEY ("id")\n)`,
+    ));
   it("rejects bad types", () =>
     expect(() =>
       createTable({
@@ -113,6 +132,16 @@ describe("alterColumn", () => {
       'ALTER TABLE "public"."items" ALTER COLUMN "a" DROP DEFAULT',
     );
   });
+  it("reference", () =>
+    expect(
+      alterColumn(s, t, {
+        kind: "reference",
+        column: "author_id",
+        references: { schema: "public", table: "authors", column: "id", onUpdate: "CASCADE" },
+      }),
+    ).toBe(
+      'ALTER TABLE "public"."items" ADD FOREIGN KEY ("author_id") REFERENCES "public"."authors" ("id") ON UPDATE CASCADE',
+    ));
   it("batches in order", () =>
     expect(
       alterColumns(s, t, [

@@ -1,4 +1,4 @@
-import { isSafeExpression } from "./ddl";
+import { FK_ACTIONS, type FkAction, isSafeExpression } from "./ddl";
 import { quoteIdent, quoteQualified } from "./quote";
 
 export const INDEX_METHODS = ["btree", "hash", "gin", "gist", "brin"] as const;
@@ -35,9 +35,6 @@ export function createIndex(input: CreateIndexInput): string {
 export function dropIndex(schema: string, name: string): string {
   return `DROP INDEX ${quoteQualified(schema, name)}`;
 }
-
-export const FK_ACTIONS = ["NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"] as const;
-export type FkAction = (typeof FK_ACTIONS)[number];
 
 export interface AddForeignKeyInput {
   schema: string;

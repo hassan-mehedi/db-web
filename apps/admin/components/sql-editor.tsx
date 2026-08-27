@@ -295,6 +295,7 @@ export function SqlEditor({
                       columns={response.result.columns}
                       rows={response.result.rows}
                       source={response.result.source}
+                      links={response.result.links}
                     />
                   )}
                   {response?.ok && response.result.columns.length === 0 && <Empty>{status}</Empty>}

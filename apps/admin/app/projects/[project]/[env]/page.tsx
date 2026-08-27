@@ -6,7 +6,12 @@ import { OwnershipAlert } from "@/components/ownership-alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
 import { envLabel } from "@/lib/projects";
-import { getDatabaseAccess, getDatabases, getSchemasWithTables } from "@/lib/queries";
+import {
+  getCompletionSchema,
+  getDatabaseAccess,
+  getDatabases,
+  getSchemasWithTables,
+} from "@/lib/queries";
 import { projectPath, tablePath, tablesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 
@@ -16,10 +21,11 @@ export default async function EnvOverview({ params }: { params: Promise<EnvParam
   await requireSession();
   const { project, env } = await params;
   const database = resolveDatabase({ project, env });
-  const [schemas, databases, access] = await Promise.all([
+  const [schemas, databases, access, tables] = await Promise.all([
     getSchemasWithTables(database),
     getDatabases(),
     getDatabaseAccess(database),
+    getCompletionSchema(database),
   ]);
   const row = databases.find((d) => d.datname === database);
   const tableCount = schemas.reduce((n, s) => n + s.tables.length, 0);
@@ -28,7 +34,13 @@ export default async function EnvOverview({ params }: { params: Promise<EnvParam
     <AppShell
       database={database}
       crumbs={[{ label: project, href: projectPath(project) }, { label: envLabel(env) }]}
-      actions={<CreateTableDialog database={database} schemas={schemas.map((s) => s.schema)} />}
+      actions={
+        <CreateTableDialog
+          database={database}
+          schemas={schemas.map((s) => s.schema)}
+          tables={tables}
+        />
+      }
     >
       <OwnershipAlert database={database} access={access} />
       <div className="mb-6 flex items-center gap-3">

@@ -3,6 +3,8 @@ import {
   completionSchema,
   databaseAccess,
   databaseSizes,
+  type Filter,
+  filterWhere,
   listAllTables,
   listColumns,
   listConstraints,
@@ -10,8 +12,11 @@ import {
   listDatabasesWithConnections,
   listIndexes,
   listSchemas,
+  orderBy,
   quoteIdent,
   quoteQualified,
+  type Sort,
+  singleColumnForeignKeys,
 } from "@db-web/sql";
 import { cache } from "react";
 import { type Cell, formatRows } from "./format";
@@ -46,6 +51,12 @@ export interface ConstraintRow {
 export interface IndexRow {
   indexname: string;
   indexdef: string;
+}
+export interface ForeignKeyRow {
+  column: string;
+  refSchema: string;
+  refTable: string;
+  refColumn: string;
 }
 
 export const getDatabaseNames = cache(
@@ -116,12 +127,24 @@ export async function getSchemasWithTables(database: string) {
 export async function getTableDetails(database: string, schema: string, table: string) {
   return timed("table-details", () =>
     withClient(database, async (c) => {
-      const [columns, constraints, indexes] = await Promise.all([
+      const rel = quoteQualified(schema, table);
+      const [columns, constraints, indexes, fks] = await Promise.all([
         c.query<ColumnRow>(listColumns, [schema, table]),
-        c.query<ConstraintRow>(listConstraints, [quoteQualified(schema, table)]),
+        c.query<ConstraintRow>(listConstraints, [rel]),
         c.query<IndexRow>(listIndexes, [schema, table]),
+        c.query<ForeignKeyRow>(singleColumnForeignKeys, [[rel]]),
       ]);
-      return { columns: columns.rows, constraints: constraints.rows, indexes: indexes.rows };
+      return {
+        columns: columns.rows,
+        constraints: constraints.rows,
+        indexes: indexes.rows,
+        foreignKeys: fks.rows.map(({ column, refSchema, refTable, refColumn }) => ({
+          column,
+          refSchema,
+          refTable,
+          refColumn,
+        })),
+      };
     }),
   );
 }
@@ -140,6 +163,8 @@ export interface TableDataOptions {
   before?: string[] | undefined;
   page?: number | undefined;
   exact?: boolean | undefined;
+  sort?: Sort | null | undefined;
+  filters?: Filter[] | undefined;
 }
 
 export interface TableData {
@@ -166,17 +191,22 @@ export async function getTableData(
       const pk = (await c.query<{ attname: string }>(primaryKeyColumns, [rel])).rows.map(
         (r) => r.attname,
       );
-      const countSql = opts.exact
-        ? `SELECT count(*)::text AS n FROM ${rel}`
+      const filters = opts.filters ?? [];
+      const sort = opts.sort ?? null;
+      const exact = opts.exact || filters.length > 0;
+      const filtered = filterWhere(filters, 1);
+      const countSql = exact
+        ? `SELECT count(*)::text AS n FROM ${rel} ${filtered.sql}`
         : "SELECT reltuples::bigint::text AS n FROM pg_class WHERE oid = $1::regclass";
-      const countPromise = c.query<{ n: string }>(countSql, opts.exact ? [] : [rel]);
+      const countPromise = c.query<{ n: string }>(countSql, exact ? filtered.params : [rel]);
 
-      if (pk.length === 0) {
+      if (pk.length === 0 || sort || filters.length > 0) {
         const page = opts.page ?? 0;
+        const n = filtered.params.length;
         const [data, count] = await Promise.all([
           c.query({
-            text: `SELECT * FROM ${rel} LIMIT $1 OFFSET $2`,
-            values: [PAGE_SIZE + 1, page * PAGE_SIZE],
+            text: `SELECT * FROM ${rel} ${filtered.sql} ${orderBy(sort, pk)} LIMIT $${n + 1} OFFSET $${n + 2}`,
+            values: [...filtered.params, PAGE_SIZE + 1, page * PAGE_SIZE],
             rowMode: "array",
           }),
           countPromise,
@@ -187,8 +217,8 @@ export async function getTableData(
           columns: data.fields.map((f) => f.name),
           rows: formatRows(rows.slice(0, PAGE_SIZE)),
           primaryKey: pk,
-          total: empty ? 0 : totalOf(count.rows[0]?.n, opts.exact),
-          estimated: !opts.exact && !empty,
+          total: empty ? 0 : totalOf(count.rows[0]?.n, exact),
+          estimated: !exact && !empty,
           hasNext: rows.length > PAGE_SIZE,
           hasPrev: page > 0,
           firstKey: null,

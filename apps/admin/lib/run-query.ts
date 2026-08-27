@@ -1,13 +1,21 @@
 import { poolFor } from "@db-web/db";
+import { singleColumnForeignKeys } from "@db-web/sql";
 import type { FieldDef, PoolClient, QueryResult } from "pg";
 import Cursor from "pg-cursor";
 import { type Cell, formatRows } from "./format";
+import type { ForeignKeyRow } from "./queries";
 
 export interface ResultSource {
   schema: string;
   table: string;
   primaryKey: string[];
   columns: (string | null)[];
+}
+
+export interface ColumnLink {
+  schema: string;
+  table: string;
+  column: string;
 }
 
 export interface QueryOutcome {
@@ -18,6 +26,7 @@ export interface QueryOutcome {
   command: string | null;
   durationMs: number;
   source: ResultSource | null;
+  links: (ColumnLink | null)[];
 }
 
 const RETURNS_ROWS = /^\s*(select|with|values|table|show|explain|returning)\b/i;
@@ -67,6 +76,23 @@ async function resolveSource(client: PoolClient, fields: FieldDef[]): Promise<Re
   return { schema: info.schema, table: info.table, primaryKey: primaryKey as string[], columns };
 }
 
+async function resolveLinks(
+  client: PoolClient,
+  fields: FieldDef[],
+): Promise<(ColumnLink | null)[]> {
+  const oids = [...new Set(fields.map((f) => f.tableID).filter((id) => id !== 0))];
+  if (oids.length === 0) return fields.map(() => null);
+  const { rows } = await client.query<ForeignKeyRow & { relid: number; attnum: number }>(
+    singleColumnForeignKeys,
+    [oids.map(String)],
+  );
+  const byCell = new Map(rows.map((r) => [`${r.relid}:${r.attnum}`, r]));
+  return fields.map((f) => {
+    const fk = byCell.get(`${f.tableID}:${f.columnID}`);
+    return fk ? { schema: fk.refSchema, table: fk.refTable, column: fk.refColumn } : null;
+  });
+}
+
 export async function runQuery(
   database: string,
   sql: string,
@@ -91,7 +117,10 @@ export async function runQuery(
       }
       const { rows, fields } = read;
       const truncated = rows.length > limit;
-      const source = await resolveSource(client, fields).catch(() => null);
+      const [source, links] = await Promise.all([
+        resolveSource(client, fields).catch(() => null),
+        resolveLinks(client, fields).catch(() => fields.map(() => null)),
+      ]);
       return {
         columns: fields.map((f) => f.name),
         rows: formatRows(truncated ? rows.slice(0, limit) : rows),
@@ -100,6 +129,7 @@ export async function runQuery(
         command: null,
         durationMs: Math.round(performance.now() - started),
         source,
+        links,
       };
     }
     const result = await client.query({ text: sql, rowMode: "array" });
@@ -112,6 +142,7 @@ export async function runQuery(
       command: last?.command ?? null,
       durationMs: Math.round(performance.now() - started),
       source: null,
+      links: [],
     };
   } finally {
     client.release();

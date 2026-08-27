@@ -21,11 +21,23 @@ function expression(e: string): string {
   return e.trim();
 }
 
+export const FK_ACTIONS = ["NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"] as const;
+export type FkAction = (typeof FK_ACTIONS)[number];
+
+export interface ColumnReference {
+  schema: string;
+  table: string;
+  column: string;
+  onDelete?: FkAction;
+  onUpdate?: FkAction;
+}
+
 export interface ColumnSpec {
   name: string;
   type: string;
   nullable: boolean;
   default?: string;
+  references?: ColumnReference;
 }
 
 export interface CreateTableInput {
@@ -35,10 +47,24 @@ export interface CreateTableInput {
   primaryKey: string[];
 }
 
+function action(a: FkAction | undefined, clause: string): string {
+  if (!a) return "";
+  if (!FK_ACTIONS.includes(a)) throw new Error(`unknown referential action ${a}`);
+  return ` ${clause} ${a}`;
+}
+
+export function referencesClause(r: ColumnReference): string {
+  return `REFERENCES ${quoteQualified(r.schema, r.table)} (${quoteIdent(r.column)})${action(
+    r.onDelete,
+    "ON DELETE",
+  )}${action(r.onUpdate, "ON UPDATE")}`;
+}
+
 function columnDef(c: ColumnSpec): string {
   const parts = [quoteIdent(c.name), type(c.type)];
   if (!c.nullable) parts.push("NOT NULL");
   if (c.default) parts.push(`DEFAULT ${expression(c.default)}`);
+  if (c.references) parts.push(referencesClause(c.references));
   return parts.join(" ");
 }
 
@@ -66,7 +92,8 @@ export type ColumnChange =
   | { kind: "rename"; column: string; to: string }
   | { kind: "type"; column: string; type: string; using?: string }
   | { kind: "nullable"; column: string; nullable: boolean }
-  | { kind: "default"; column: string; default: string | null };
+  | { kind: "default"; column: string; default: string | null }
+  | { kind: "reference"; column: string; references: ColumnReference };
 
 export function alterColumn(schema: string, table: string, change: ColumnChange): string {
   const rel = quoteQualified(schema, table);
@@ -87,6 +114,8 @@ export function alterColumn(schema: string, table: string, change: ColumnChange)
       return change.default === null
         ? `ALTER TABLE ${rel} ALTER COLUMN ${quoteIdent(change.column)} DROP DEFAULT`
         : `ALTER TABLE ${rel} ALTER COLUMN ${quoteIdent(change.column)} SET DEFAULT ${expression(change.default)}`;
+    case "reference":
+      return `ALTER TABLE ${rel} ADD FOREIGN KEY (${quoteIdent(change.column)}) ${referencesClause(change.references)}`;
   }
 }
 

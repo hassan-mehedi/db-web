@@ -1,10 +1,12 @@
 "use client";
 
 import { type ColumnSpec, createTable, isSafeExpression, isValidType } from "@db-web/sql";
+import { Link2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { createTableAction } from "@/app/actions/schema";
 import { FormError } from "@/components/form-error";
+import { firstReference, ReferencePicker } from "@/components/reference-picker";
 import { SqlPreview } from "@/components/sql-preview";
 import { TypeInput } from "@/components/type-input";
 import { Button } from "@/components/ui/button";
@@ -17,7 +19,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import type { CompletionSchema } from "@/lib/queries";
 import { tablePath } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 
 type Row = ColumnSpec & { pk: boolean };
 const IDENT = /^[a-z_][a-z0-9_]*$/;
@@ -26,7 +30,15 @@ const initialRows: Row[] = [
   { name: "created_at", type: "timestamptz", nullable: false, default: "now()", pk: false },
 ];
 
-export function CreateTableDialog({ database, schemas }: { database: string; schemas: string[] }) {
+export function CreateTableDialog({
+  database,
+  schemas,
+  tables,
+}: {
+  database: string;
+  schemas: string[];
+  tables: CompletionSchema;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [schema, setSchema] = useState(schemas[0] ?? "public");
@@ -40,9 +52,10 @@ export function CreateTableDialog({ database, schemas }: { database: string; sch
     () => ({
       schema,
       name,
-      columns: rows.map(({ pk: _pk, default: d, ...c }) => ({
+      columns: rows.map(({ pk: _pk, default: d, references, ...c }) => ({
         ...c,
         ...(d ? { default: d } : {}),
+        ...(references ? { references } : {}),
       })),
       primaryKey: rows.filter((r) => r.pk).map((r) => r.name),
     }),
@@ -57,6 +70,7 @@ export function CreateTableDialog({ database, schemas }: { database: string; sch
     }
   }, [input]);
 
+  const hasTables = Object.values(tables).some((t) => Object.keys(t).length > 0);
   const valid =
     IDENT.test(name) &&
     rows.length > 0 &&
@@ -126,19 +140,20 @@ export function CreateTableDialog({ database, schemas }: { database: string; sch
               />
             </div>
             <div className="grid gap-2">
-              <div className="grid grid-cols-[1fr_1.5fr_1fr_auto_auto_auto] items-center gap-2 text-xs text-muted-foreground">
+              <div className="grid grid-cols-[1fr_1.5fr_1fr_auto_auto_auto_auto] items-center gap-2 text-xs text-muted-foreground">
                 <span>Name</span>
                 <span>Type</span>
                 <span>Default</span>
                 <span>Null</span>
                 <span>PK</span>
+                <span>FK</span>
                 <span />
               </div>
               {rows.map((r, i) => (
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional
                   key={i}
-                  className="grid grid-cols-[1fr_1.5fr_1fr_auto_auto_auto] items-start gap-2"
+                  className="grid grid-cols-[1fr_1.5fr_1fr_auto_auto_auto_auto] items-start gap-2"
                 >
                   <Input
                     className="font-mono"
@@ -168,12 +183,45 @@ export function CreateTableDialog({ database, schemas }: { database: string; sch
                     onChange={(e) => update(i, { pk: e.target.checked })}
                   />
                   <Button
-                    size="sm"
+                    size="icon-sm"
+                    variant={r.references ? "secondary" : "ghost"}
+                    aria-label={r.references ? "remove foreign key" : "add foreign key"}
+                    aria-pressed={!!r.references}
+                    disabled={!hasTables}
+                    className={cn(r.references && "text-sky-600 dark:text-sky-400")}
+                    onClick={() =>
+                      setRows((prev) =>
+                        prev.map((row, j) => {
+                          if (j !== i) return row;
+                          const { references, ...rest } = row;
+                          return references
+                            ? rest
+                            : { ...rest, references: firstReference(tables, schema) };
+                        }),
+                      )
+                    }
+                  >
+                    <Link2 />
+                  </Button>
+                  <Button
+                    size="icon-sm"
                     variant="ghost"
+                    aria-label="remove column"
                     onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
                   >
-                    ×
+                    <X />
                   </Button>
+                  {r.references && (
+                    <div className="col-span-full rounded-md border border-dashed p-2">
+                      <ReferencePicker
+                        tables={tables}
+                        value={r.references}
+                        onChange={(references) => update(i, { references })}
+                        idPrefix={`fk-${i}`}
+                        className="sm:grid-cols-4"
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
               <div>

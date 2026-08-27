@@ -3,7 +3,7 @@ import { alterColumns, createTable, databaseAccess } from "@db-web/sql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDatabase, dropDatabase, planCreateDatabase } from "../lib/cluster";
 import { deleteRows, insertRow, updateRow, updateRows } from "../lib/dml";
-import { getTableData } from "../lib/queries";
+import { getTableData, getTableDetails } from "../lib/queries";
 import { runQuery } from "../lib/run-query";
 
 const url = process.env.DATABASE_URL_MAINTENANCE;
@@ -165,6 +165,79 @@ suite("cluster + schema + dml against a real Postgres", () => {
     expect(noKey.source).toBeNull();
     const expr = await runQuery(DB, "select 1 as one", 10);
     expect(expr.source).toBeNull();
+  });
+
+  it("filters and sorts table data, and links foreign keys", async () => {
+    await withClient(DB, (c) =>
+      c.query(
+        createTable({
+          schema: "api",
+          name: "comments",
+          columns: [
+            { name: "id", type: "int", nullable: false },
+            { name: "body", type: "text", nullable: true },
+            {
+              name: "post_id",
+              type: "bigint",
+              nullable: true,
+              references: { schema: "api", table: "posts", column: "id", onDelete: "CASCADE" },
+            },
+          ],
+          primaryKey: ["id"],
+        }),
+      ),
+    );
+    const post = await withClient(DB, (c) =>
+      c.query<{ id: string }>("INSERT INTO api.posts (title) VALUES ('linked') RETURNING id"),
+    );
+    const postId = post.rows[0]?.id ?? "";
+    await withClient(DB, (c) =>
+      c.query(
+        "INSERT INTO api.comments (id, body, post_id) VALUES (1, 'apple', $1), (2, 'banana', NULL), (3, 'cherry', $1)",
+        [postId],
+      ),
+    );
+    const details = await getTableDetails(DB, "api", "comments");
+    expect(details.foreignKeys).toEqual([
+      { column: "post_id", refSchema: "api", refTable: "posts", refColumn: "id" },
+    ]);
+    expect(details.constraints.map((c) => c.definition)).toContain(
+      "FOREIGN KEY (post_id) REFERENCES api.posts(id) ON DELETE CASCADE",
+    );
+
+    const sorted = await getTableData(DB, "api", "comments", {
+      sort: { column: "body", desc: true },
+    });
+    expect(sorted.rows.map((r) => r[1])).toEqual(["cherry", "banana", "apple"]);
+    expect(sorted.estimated).toBe(true);
+
+    const filtered = await getTableData(DB, "api", "comments", {
+      filters: [
+        { column: "body", op: "ilike", value: "%an%" },
+        { column: "post_id", op: "null", value: "" },
+      ],
+    });
+    expect(filtered.rows.map((r) => r[0])).toEqual(["2"]);
+    expect(filtered.total).toBe(1);
+    expect(filtered.estimated).toBe(false);
+    const inList = await getTableData(DB, "api", "comments", {
+      filters: [{ column: "id", op: "in", value: "1, 3" }],
+      sort: { column: "id", desc: true },
+    });
+    expect(inList.rows.map((r) => r[0])).toEqual(["3", "1"]);
+    const numeric = await getTableData(DB, "api", "comments", {
+      filters: [{ column: "id", op: "gt", value: "1" }],
+    });
+    expect(numeric.total).toBe(2);
+
+    const out = await runQuery(
+      DB,
+      "select c.id, c.post_id, p.title from api.comments c join api.posts p on p.id = c.post_id",
+      10,
+    );
+    expect(out.source).toBeNull();
+    expect(out.links).toEqual([null, { schema: "api", table: "posts", column: "id" }, null]);
+    await withClient(DB, (c) => c.query("DROP TABLE api.comments"));
   });
 
   it("pages by primary key and estimates the count", async () => {

@@ -22,9 +22,15 @@ import {
 } from "@/components/ui/table";
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
 import { envLabel } from "@/lib/projects";
-import { getSchemasWithTables, getTableData, getTableDetails } from "@/lib/queries";
+import {
+  getCompletionSchema,
+  getSchemasWithTables,
+  getTableData,
+  getTableDetails,
+} from "@/lib/queries";
 import { envPath, projectPath, tablePath, tablesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
+import { parseFilters, parseSort } from "@/lib/table-filters";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +56,8 @@ export default async function TablePage({
     after?: string;
     before?: string;
     count?: string;
+    f?: string;
+    s?: string;
   }>;
 }) {
   await requireSession();
@@ -63,14 +71,20 @@ export default async function TablePage({
   const dataQuery = (extra: Record<string, string | undefined>) => {
     const q = new URLSearchParams({ tab: "data" });
     if (exact) q.set("count", "exact");
+    if (sp.f) q.set("f", sp.f);
+    if (sp.s) q.set("s", sp.s);
     for (const [k, v] of Object.entries(extra)) if (v !== undefined) q.set(k, v);
     return `${base}?${q}`;
   };
 
-  const [details, schemas] = await Promise.all([
+  const [details, schemas, allColumns] = await Promise.all([
     getTableDetails(database, schema, table),
     getSchemasWithTables(database),
+    getCompletionSchema(database),
   ]);
+  const columnNames = details.columns.map((c) => c.column_name);
+  const filters = parseFilters(sp.f, columnNames);
+  const sort = parseSort(sp.s, columnNames);
   const data =
     tab === "data"
       ? await getTableData(database, schema, table, {
@@ -78,13 +92,14 @@ export default async function TablePage({
           after: parseCursor(sp.after),
           before: parseCursor(sp.before),
           exact,
+          filters,
+          sort,
         })
       : null;
   const allTables = schemas.flatMap((s) =>
     s.tables.map((t) => ({ schema: s.schema, table: t.relname })),
   );
   const rel = { database, schema, table };
-  const columnNames = details.columns.map((c) => c.column_name);
 
   return (
     <TablesLayout
@@ -119,8 +134,11 @@ export default async function TablePage({
             rel={{ database, schema, table }}
             columns={data.columns}
             columnMeta={details.columns}
+            foreignKeys={details.foreignKeys}
             rows={data.rows}
             primaryKey={data.primaryKey}
+            filters={filters}
+            sort={sort}
           />
           <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
             <span>
@@ -175,7 +193,13 @@ export default async function TablePage({
       )}
 
       {tab === "columns" && (
-        <ColumnEditor database={database} schema={schema} table={table} columns={details.columns} />
+        <ColumnEditor
+          database={database}
+          schema={schema}
+          table={table}
+          columns={details.columns}
+          tables={allColumns}
+        />
       )}
 
       {tab === "constraints" && (

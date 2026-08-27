@@ -1,10 +1,17 @@
 "use client";
 
-import { alterColumns, type ColumnChange, isSafeExpression, isValidType } from "@db-web/sql";
+import {
+  alterColumns,
+  type ColumnChange,
+  type ColumnReference,
+  isSafeExpression,
+  isValidType,
+} from "@db-web/sql";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { alterColumnsAction } from "@/app/actions/schema";
 import { FormError } from "@/components/form-error";
+import { firstReference, ReferencePicker } from "@/components/reference-picker";
 import { SqlPreview } from "@/components/sql-preview";
 import { TypeInput } from "@/components/type-input";
 import { Button } from "@/components/ui/button";
@@ -25,17 +32,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { ColumnRow } from "@/lib/queries";
+import type { ColumnRow, CompletionSchema } from "@/lib/queries";
 
 interface Props {
   database: string;
   schema: string;
   table: string;
   columns: ColumnRow[];
+  tables: CompletionSchema;
 }
 
-type Draft = { name: string; type: string; nullable: boolean; default: string };
+type Draft = {
+  name: string;
+  type: string;
+  nullable: boolean;
+  default: string;
+  references?: ColumnReference;
+};
 const emptyDraft: Draft = { name: "", type: "text", nullable: true, default: "" };
+
+function describeReference(r: ColumnReference): string {
+  return `${r.schema}.${r.table}(${r.column})`;
+}
 
 function describe(c: ColumnChange): string {
   switch (c.kind) {
@@ -51,10 +69,12 @@ function describe(c: ColumnChange): string {
       return `${c.column} ${c.nullable ? "nullable" : "not null"}`;
     case "default":
       return `${c.column} default ${c.default === null ? "dropped" : `→ ${c.default}`}`;
+    case "reference":
+      return `${c.column} → ${describeReference(c.references)}`;
   }
 }
 
-export function ColumnEditor({ database, schema, table, columns }: Props) {
+export function ColumnEditor({ database, schema, table, columns, tables }: Props) {
   const router = useRouter();
   const [changes, setChanges] = useState<ColumnChange[]>([]);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -208,6 +228,29 @@ export function ColumnEditor({ database, schema, table, columns }: Props) {
               />
               Nullable
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={!!draft.references}
+                onChange={(e) => {
+                  const { references, ...rest } = draft;
+                  setDraft(
+                    e.target.checked
+                      ? { ...rest, references: references ?? firstReference(tables, schema) }
+                      : rest,
+                  );
+                }}
+              />
+              Foreign key
+            </label>
+            {draft.references && (
+              <ReferencePicker
+                tables={tables}
+                value={draft.references}
+                onChange={(references) => setDraft({ ...draft, references })}
+                idPrefix="add-fk"
+              />
+            )}
             <DialogFooter>
               <Button
                 disabled={!draftValid}
@@ -219,6 +262,7 @@ export function ColumnEditor({ database, schema, table, columns }: Props) {
                       type: draft.type,
                       nullable: draft.nullable,
                       ...(draft.default ? { default: draft.default } : {}),
+                      ...(draft.references ? { references: draft.references } : {}),
                     },
                   });
                   setDraft(emptyDraft);
@@ -235,6 +279,8 @@ export function ColumnEditor({ database, schema, table, columns }: Props) {
       {editing && (
         <EditColumnDialog
           database={database}
+          schema={schema}
+          tables={tables}
           column={editing}
           onClose={() => setEditing(null)}
           onChange={(c) => {
@@ -270,11 +316,15 @@ export function ColumnEditor({ database, schema, table, columns }: Props) {
 
 function EditColumnDialog({
   database,
+  schema,
+  tables,
   column,
   onClose,
   onChange,
 }: {
   database: string;
+  schema: string;
+  tables: CompletionSchema;
   column: ColumnRow;
   onClose: () => void;
   onChange: (c: ColumnChange) => void;
@@ -284,7 +334,9 @@ function EditColumnDialog({
   const [type, setType] = useState("");
   const [using, setUsing] = useState("");
   const [def, setDef] = useState(column.column_default ?? "");
+  const [reference, setReference] = useState<ColumnReference>(() => firstReference(tables, schema));
   const nullable = column.is_nullable === "YES";
+  const hasTables = Object.values(tables).some((t) => Object.keys(t).length > 0);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -373,6 +425,27 @@ function EditColumnDialog({
               {nullable ? "Set NOT NULL" : "Drop NOT NULL"}
             </Button>
           </div>
+          {hasTables && (
+            <div className="grid gap-2">
+              <span>Foreign key</span>
+              <ReferencePicker
+                tables={tables}
+                value={reference}
+                onChange={setReference}
+                idPrefix="edit-fk"
+              />
+              <div>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    onChange({ kind: "reference", column: name, references: reference })
+                  }
+                >
+                  Queue
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

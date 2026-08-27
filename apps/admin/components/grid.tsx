@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowDown, ArrowUp, KeyRound } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, KeyRound, Link2 } from "lucide-react";
+import Link from "next/link";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Cell } from "@/lib/format";
@@ -12,12 +13,19 @@ export interface GridColumn {
   type?: string | undefined;
   primaryKey?: boolean | undefined;
   editable?: boolean | undefined;
+  linkTo?: string | undefined;
 }
+
+export type GridSort = { col: number; desc: boolean } | null;
 
 interface Props {
   columns: GridColumn[];
   rows: Cell[][];
   sortable?: boolean;
+  sort?: GridSort;
+  onSort?: (next: GridSort) => void;
+  linkFor?: (col: number, value: string) => string | null;
+  search?: string;
   selected?: Set<number>;
   onSelect?: (next: Set<number>) => void;
   edits?: PendingEdits;
@@ -26,14 +34,16 @@ interface Props {
   className?: string;
 }
 
-type Sort = { col: number; desc: boolean } | null;
-
 const CELL = "h-8 max-w-xs truncate border-r border-b px-2.5 font-mono text-xs last:border-r-0";
 
 export function Grid({
   columns,
   rows,
   sortable = false,
+  sort: controlledSort,
+  onSort,
+  linkFor,
+  search = "",
   selected,
   onSelect,
   edits,
@@ -41,7 +51,8 @@ export function Grid({
   emptyText = "No rows",
   className,
 }: Props) {
-  const [sort, setSort] = useState<Sort>(null);
+  const [localSort, setLocalSort] = useState<GridSort>(null);
+  const sort = onSort ? (controlledSort ?? null) : localSort;
   const [active, setActive] = useState<{ row: number; col: number } | null>(null);
   const [editing, setEditing] = useState<{ row: number; col: number } | null>(null);
   const [draft, setDraft] = useState("");
@@ -53,8 +64,11 @@ export function Grid({
       : (rows[row]?.[col] ?? null);
 
   const order = useMemo(() => {
-    const idx = rows.map((_, i) => i);
-    if (!sort) return idx;
+    const q = search.trim().toLowerCase();
+    const idx = rows
+      .map((_, i) => i)
+      .filter((i) => !q || rows[i]?.some((c) => c?.toLowerCase().includes(q)));
+    if (!sort || onSort) return idx;
     const { col, desc } = sort;
     const collator = new Intl.Collator(undefined, { numeric: true });
     idx.sort((a, b) => {
@@ -66,7 +80,7 @@ export function Grid({
       return desc ? collator.compare(y, x) : collator.compare(x, y);
     });
     return idx;
-  }, [rows, sort]);
+  }, [rows, sort, onSort, search]);
 
   useEffect(() => {
     if (!active) return;
@@ -147,11 +161,10 @@ export function Grid({
 
   function toggleSort(col: number) {
     if (!sortable) return;
-    setSort((s) => {
-      if (!s || s.col !== col) return { col, desc: false };
-      if (!s.desc) return { col, desc: true };
-      return null;
-    });
+    const next: GridSort =
+      !sort || sort.col !== col ? { col, desc: false } : sort.desc ? null : { col, desc: true };
+    if (onSort) onSort(next);
+    else setLocalSort(next);
   }
 
   return (
@@ -185,6 +198,12 @@ export function Grid({
                 >
                   <div className="flex items-center gap-1.5 font-mono text-xs font-medium">
                     {c.primaryKey && <KeyRound className="size-3 text-amber-500" />}
+                    {c.linkTo && !c.primaryKey && (
+                      <Link2
+                        className="size-3 text-sky-500"
+                        aria-label={`references ${c.linkTo}`}
+                      />
+                    )}
                     <span className="truncate">{c.name}</span>
                     {sorted &&
                       (sorted.desc ? (
@@ -232,6 +251,7 @@ export function Grid({
                   const isEditing = editing?.row === r && editing.col === c;
                   const isActive = active?.row === r && active.col === c;
                   const editable = !!onEdit && !!column?.editable;
+                  const href = cell !== null && linkFor ? linkFor(c, cell) : null;
                   return (
                     <td
                       // biome-ignore lint/suspicious/noArrayIndexKey: cells are positional
@@ -275,6 +295,20 @@ export function Grid({
                         </div>
                       ) : cell === null ? (
                         <span className="italic text-muted-foreground/70">NULL</span>
+                      ) : href ? (
+                        <span className="flex items-center gap-1">
+                          <span className="min-w-0 flex-1 truncate">{cell}</span>
+                          <Link
+                            href={href}
+                            title={`Open ${column?.linkTo ?? "referenced row"}`}
+                            aria-label={`open referenced row ${cell}`}
+                            className="shrink-0 rounded p-0.5 text-sky-600 opacity-0 hover:bg-sky-500/15 focus-visible:opacity-100 group-hover:opacity-100 dark:text-sky-400"
+                            onClick={(e) => e.stopPropagation()}
+                            onDoubleClick={(e) => e.stopPropagation()}
+                          >
+                            <ArrowUpRight className="size-3.5" />
+                          </Link>
+                        </span>
                       ) : (
                         cell
                       )}
@@ -284,13 +318,13 @@ export function Grid({
               </tr>
             );
           })}
-          {rows.length === 0 && (
+          {order.length === 0 && (
             <tr>
               <td
                 colSpan={columns.length + 1}
                 className="h-24 text-center text-sm text-muted-foreground"
               >
-                {emptyText}
+                {rows.length === 0 ? emptyText : "No rows match"}
               </td>
             </tr>
           )}

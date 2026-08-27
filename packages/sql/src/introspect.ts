@@ -44,6 +44,16 @@ FROM pg_constraint
 WHERE conrelid = $1::regclass
 ORDER BY contype, conname`;
 
+export const singleColumnForeignKeys = `
+SELECT c.conrelid::int AS relid, c.conkey[1] AS attnum, a.attname AS column,
+       rn.nspname AS "refSchema", rc.relname AS "refTable", ra.attname AS "refColumn"
+FROM pg_constraint c
+JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+JOIN pg_class rc ON rc.oid = c.confrelid
+JOIN pg_namespace rn ON rn.oid = rc.relnamespace
+JOIN pg_attribute ra ON ra.attrelid = c.confrelid AND ra.attnum = c.confkey[1]
+WHERE c.conrelid = ANY($1::regclass[]) AND c.contype = 'f' AND array_length(c.conkey, 1) = 1`;
+
 export const listIndexes = `
 SELECT indexname, indexdef FROM pg_indexes
 WHERE schemaname = $1 AND tablename = $2
