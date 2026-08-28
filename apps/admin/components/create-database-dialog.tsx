@@ -48,6 +48,7 @@ export function CreateDatabaseDialog({
   const [pending, start] = useTransition();
 
   const valid = isValidProjectEnv(project, env);
+  const problem = formProblem(project, env);
   const sql = useMemo(() => {
     if (!valid) return "";
     const plan = bootstrap
@@ -136,12 +137,7 @@ export function CreateDatabaseDialog({
                 />
               </div>
             </div>
-            {(project || env) && !valid && (
-              <p className="text-xs text-destructive">
-                Project: letters and digits, starting with a letter. Environment: letters and
-                digits. Whole name max 49 chars.
-              </p>
-            )}
+            {problem && <p className="text-xs text-destructive">{problem}</p>}
             <div className="flex items-center gap-2">
               <Checkbox
                 id="db-bootstrap"
@@ -226,4 +222,17 @@ export function CreateDatabaseDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function formProblem(project: string, env: string): string | null {
+  if (!project && !env) return null;
+  if (project && !/^[a-z][a-z0-9]*$/.test(project)) {
+    return "Project: lowercase letters and digits, starting with a letter.";
+  }
+  if (env && !/^[a-z0-9]+$/.test(env)) return "Environment: lowercase letters and digits.";
+  if (!project) return "Project is required.";
+  if (!env) return "Environment is required, for example dev.";
+  if (!isValidProjectEnv(project, env))
+    return "Whole database name must be 49 characters or fewer.";
+  return null;
 }
