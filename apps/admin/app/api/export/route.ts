@@ -1,9 +1,9 @@
-import { isValidDatabaseName } from "@db-web/bootstrap";
 import { headers } from "next/headers";
 import type { NextRequest } from "next/server";
 import { getAuth } from "@/lib/auth";
 import { csvFileName } from "@/lib/csv";
 import { tableCsvStream } from "@/lib/export-table";
+import { isValidProjectEnv, parseDatabaseName } from "@/lib/projects";
 import { getTableDetails } from "@/lib/queries";
 import { parseFilters, parseSort } from "@/lib/table-filters";
 
@@ -17,8 +17,11 @@ export async function GET(req: NextRequest) {
   const database = q.get("database") ?? "";
   const schema = q.get("schema") ?? "";
   const table = q.get("table") ?? "";
-  if (!isValidDatabaseName(database) || !schema || !table) {
-    return new Response("bad request", { status: 400 });
+  const { project, env } = parseDatabaseName(database);
+  if (!isValidProjectEnv(project, env) || !schema || !table) {
+    return new Response(`unknown database, schema or table: ${database} ${schema}.${table}`, {
+      status: 400,
+    });
   }
 
   let columns: string[];

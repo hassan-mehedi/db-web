@@ -7,7 +7,7 @@ import { Grid, type GridColumn } from "@/components/grid";
 import { PendingChangesBar } from "@/components/pending-changes-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { csvFileName, toCsv } from "@/lib/csv";
+import { csvFileName, saveBlob, toCsv } from "@/lib/csv";
 import type { RowChange, RowKey } from "@/lib/dml";
 import type { Cell } from "@/lib/format";
 import type { PendingEdits } from "@/lib/pending-edits";
@@ -70,12 +70,7 @@ export function ResultsGrid({ database, columns, rows: initial, source, links }:
 
   function download() {
     const blob = new Blob([toCsv(columns, rows)], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = csvFileName(database, source ? source.table : "query");
-    a.click();
-    URL.revokeObjectURL(url);
+    saveBlob(blob, csvFileName(database, source ? source.table : "query"));
   }
 
   return (

@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { downloadCsv } from "@/lib/csv";
 import type { Rel, RowChange, RowKey } from "@/lib/dml";
 import type { Cell } from "@/lib/format";
 import type { ColumnRow, ForeignKeyRow } from "@/lib/queries";
@@ -57,6 +58,7 @@ export function DataGrid({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [exporting, setExporting] = useState(false);
 
   const keyOf = useCallback(
     (row: Cell[]): RowKey =>
@@ -117,6 +119,14 @@ export function DataGrid({
     return `/api/export?${q}`;
   })();
 
+  async function exportCsv() {
+    setError(null);
+    setExporting(true);
+    const res = await downloadCsv(exportHref);
+    setExporting(false);
+    if (!res.ok) setError(`Export failed. ${res.error}`);
+  }
+
   function remove() {
     setError(null);
     start(async () => {
@@ -164,11 +174,9 @@ export function DataGrid({
           filters={filters}
           onChange={(next) => navigate({ filters: next, sort })}
         />
-        <Button size="sm" variant="outline" asChild>
-          <a href={exportHref} download>
-            <Download />
-            Download CSV
-          </a>
+        <Button size="sm" variant="outline" onClick={exportCsv} disabled={exporting}>
+          <Download />
+          {exporting ? "Preparing CSV" : "Download CSV"}
         </Button>
       </div>
       <FormError error={error} mono />
