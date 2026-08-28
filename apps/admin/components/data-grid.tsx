@@ -1,7 +1,7 @@
 "use client";
 
 import type { Filter, Sort } from "@db-web/sql";
-import { Plus, Trash2 } from "lucide-react";
+import { Download, Plus, Trash2 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import { deleteRowsAction, updateRowsAction } from "@/app/actions/data";
@@ -88,11 +88,14 @@ export function DataGrid({
 
   const defs: GridColumn[] = columns.map((name) => {
     const fk = foreignKeys.find((k) => k.column === name);
+    const meta = columnMeta.find((m) => m.column_name === name);
+    const always = meta?.identity_generation === "ALWAYS";
     return {
       name,
-      type: columnMeta.find((m) => m.column_name === name)?.data_type,
+      type: meta?.data_type,
       primaryKey: primaryKey.includes(name),
-      editable,
+      editable: editable && !always,
+      readOnlyHint: always ? "auto increment, the database assigns this value" : undefined,
       linkTo: fk ? `${fk.refSchema}.${fk.refTable}` : undefined,
     };
   });
@@ -104,6 +107,15 @@ export function DataGrid({
     },
     [foreignKeys, columns, rel.database],
   );
+
+  const exportHref = (() => {
+    const q = new URLSearchParams({ database: rel.database, schema: rel.schema, table: rel.table });
+    const f = serializeFilters(filters);
+    const s = serializeSort(sort);
+    if (f) q.set("f", f);
+    if (s) q.set("s", s);
+    return `/api/export?${q}`;
+  })();
 
   function remove() {
     setError(null);
@@ -146,11 +158,19 @@ export function DataGrid({
           </span>
         )}
       </div>
-      <FilterBar
-        columns={columns}
-        filters={filters}
-        onChange={(next) => navigate({ filters: next, sort })}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterBar
+          columns={columns}
+          filters={filters}
+          onChange={(next) => navigate({ filters: next, sort })}
+        />
+        <Button size="sm" variant="outline" asChild>
+          <a href={exportHref} download>
+            <Download />
+            Download CSV
+          </a>
+        </Button>
+      </div>
       <FormError error={error} mono />
       <PendingChangesBar
         count={edits.edits.size}

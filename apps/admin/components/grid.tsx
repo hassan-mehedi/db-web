@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ArrowUpRight, KeyRound, Link2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, KeyRound, Link2, Lock } from "lucide-react";
 import Link from "next/link";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,6 +13,7 @@ export interface GridColumn {
   type?: string | undefined;
   primaryKey?: boolean | undefined;
   editable?: boolean | undefined;
+  readOnlyHint?: string | undefined;
   linkTo?: string | undefined;
 }
 
@@ -205,6 +206,9 @@ export function Grid({
                       />
                     )}
                     <span className="truncate">{c.name}</span>
+                    {onEdit && !c.editable && c.readOnlyHint && (
+                      <Lock className="size-3 text-muted-foreground" aria-label={c.readOnlyHint} />
+                    )}
                     {sorted &&
                       (sorted.desc ? (
                         <ArrowDown className="size-3 text-muted-foreground" />

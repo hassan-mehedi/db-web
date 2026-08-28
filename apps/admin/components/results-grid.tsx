@@ -1,11 +1,13 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Download, Search } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { updateRowsAction } from "@/app/actions/data";
 import { Grid, type GridColumn } from "@/components/grid";
 import { PendingChangesBar } from "@/components/pending-changes-bar";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { csvFileName, toCsv } from "@/lib/csv";
 import type { RowChange, RowKey } from "@/lib/dml";
 import type { Cell } from "@/lib/format";
 import type { PendingEdits } from "@/lib/pending-edits";
@@ -66,17 +68,36 @@ export function ResultsGrid({ database, columns, rows: initial, source, links }:
     [links, database],
   );
 
+  function download() {
+    const blob = new Blob([toCsv(columns, rows)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = csvFileName(database, source ? source.table : "query");
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 p-2">
-      <div className="relative w-64">
-        <Search className="pointer-events-none absolute top-2 left-2 size-3.5 text-muted-foreground" />
-        <Input
-          aria-label="filter rows"
-          className="h-8 pl-7 font-mono text-xs"
-          placeholder="Filter rows"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex items-center gap-2">
+        <div className="relative w-64">
+          <Search className="pointer-events-none absolute top-2 left-2 size-3.5 text-muted-foreground" />
+          <Input
+            aria-label="filter rows"
+            className="h-8 pl-7 font-mono text-xs"
+            placeholder="Filter rows"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Button size="sm" variant="outline" onClick={download}>
+          <Download />
+          Download CSV
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          {rows.length} row{rows.length === 1 ? "" : "s"} loaded
+        </span>
       </div>
       <PendingChangesBar
         count={edits.edits.size}
