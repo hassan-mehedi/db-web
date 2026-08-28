@@ -73,15 +73,41 @@ export function metaPool(): pg.Pool {
   return pool;
 }
 
+const MISSING_DATABASE = "3D000";
+
+async function createMetaDatabase(): Promise<void> {
+  const maintenance = process.env.DATABASE_URL_MAINTENANCE;
+  const meta = process.env.DATABASE_URL_META;
+  if (!maintenance || !meta)
+    throw new Error("DATABASE_URL_MAINTENANCE and DATABASE_URL_META are required");
+  const name = decodeURIComponent(new URL(meta).pathname.slice(1));
+  const client = new pg.Client({ connectionString: maintenance });
+  await client.connect();
+  try {
+    const exists = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [name]);
+    if (exists.rowCount === 0)
+      await client.query(`CREATE DATABASE "${name.replaceAll('"', '""')}"`);
+  } finally {
+    await client.end();
+  }
+}
+
+async function applyMetaSchema(): Promise<void> {
+  try {
+    await metaPool().query(AUTH_SCHEMA + SCHEMA);
+  } catch (err) {
+    if ((err as { code?: string }).code !== MISSING_DATABASE) throw err;
+    await createMetaDatabase();
+    await metaPool().query(AUTH_SCHEMA + SCHEMA);
+  }
+}
+
 export function ensureMetaSchema(): Promise<void> {
   if (!ready) {
-    ready = metaPool()
-      .query(AUTH_SCHEMA + SCHEMA)
-      .then(() => undefined)
-      .catch((err) => {
-        ready = null;
-        throw err;
-      });
+    ready = applyMetaSchema().catch((err) => {
+      ready = null;
+      throw err;
+    });
   }
   return ready;
 }
