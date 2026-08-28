@@ -33,8 +33,17 @@ interface Field {
   text: string;
 }
 
+function hasDefault(c: ColumnRow): boolean {
+  return c.column_default !== null || c.is_identity === "YES";
+}
+
+function defaultLabel(c: ColumnRow): string {
+  if (c.is_identity === "YES") return "auto increment";
+  return c.column_default ?? "";
+}
+
 function initialMode(c: ColumnRow): Mode {
-  if (c.column_default !== null) return "default";
+  if (hasDefault(c)) return "default";
   if (c.is_nullable === "YES") return "null";
   return "value";
 }
@@ -42,7 +51,7 @@ function initialMode(c: ColumnRow): Mode {
 function placeholderFor(c: ColumnRow, mode: Mode) {
   if (mode === "value") return "";
   if (mode === "null") return "NULL";
-  return c.column_default ?? "";
+  return defaultLabel(c);
 }
 
 export function InsertRowDialog({
@@ -100,7 +109,7 @@ export function InsertRowDialog({
         <div className="grid gap-3">
           {columns.map((c) => {
             const v = values[c.column_name] ?? { mode: initialMode(c), text: "" };
-            const required = c.is_nullable === "NO" && c.column_default === null;
+            const required = c.is_nullable === "NO" && !hasDefault(c);
             return (
               <div
                 key={c.column_name}
@@ -132,6 +141,7 @@ export function InsertRowDialog({
                   className={`font-mono text-xs ${v.mode !== "value" ? "italic placeholder:text-muted-foreground/60" : ""}`}
                   value={v.mode === "value" ? v.text : ""}
                   placeholder={placeholderFor(c, v.mode)}
+                  disabled={c.identity_generation === "ALWAYS"}
                   onChange={(e) => {
                     const text = e.target.value;
                     if (text === "" && !required) set(c, { mode: initialMode(c), text: "" });
@@ -146,9 +156,11 @@ export function InsertRowDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="value">value</SelectItem>
+                    {c.identity_generation !== "ALWAYS" && (
+                      <SelectItem value="value">value</SelectItem>
+                    )}
                     {c.is_nullable === "YES" && <SelectItem value="null">NULL</SelectItem>}
-                    {c.column_default !== null && <SelectItem value="default">default</SelectItem>}
+                    {hasDefault(c) && <SelectItem value="default">default</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>
