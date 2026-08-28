@@ -1,15 +1,18 @@
 "use client";
 
 import type { Filter, Sort } from "@db-web/sql";
-import { Download, Plus, Trash2 } from "lucide-react";
+import { Download, Plus, Trash2, Upload } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import { deleteRowsAction, updateRowsAction } from "@/app/actions/data";
+import { ColumnPicker, useHiddenColumns } from "@/components/column-picker";
 import { FilterBar } from "@/components/filter-bar";
 import { FormError } from "@/components/form-error";
 import { Grid, type GridColumn, type GridSort } from "@/components/grid";
+import { ImportCsvDialog } from "@/components/import-csv-dialog";
 import { InsertRowDialog } from "@/components/insert-row-dialog";
 import { PendingChangesBar } from "@/components/pending-changes-bar";
+import { RowDetail } from "@/components/row-detail";
 import { SqlPreview } from "@/components/sql-preview";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,7 +57,14 @@ export function DataGrid({
   const searchParams = useSearchParams();
   const editable = primaryKey.length > 0;
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [inserting, setInserting] = useState(false);
+  const [inserting, setInserting] = useState<false | { initial?: Record<string, Cell> }>(false);
+  const [openRow, setOpenRow] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [hidden, setHidden] = useHiddenColumns(
+    `db-web:columns:${rel.database}.${rel.schema}.${rel.table}`,
+    columns,
+  );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -147,9 +157,13 @@ export function DataGrid({
       <div className="flex flex-wrap items-center gap-2">
         {editable ? (
           <>
-            <Button size="sm" onClick={() => setInserting(true)}>
+            <Button size="sm" onClick={() => setInserting({})}>
               <Plus />
               Insert row
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setImporting(true)}>
+              <Upload />
+              Import CSV
             </Button>
             {selected.size > 0 && (
               <Button size="sm" variant="destructive" onClick={() => setConfirmDelete(true)}>
@@ -174,12 +188,14 @@ export function DataGrid({
           filters={filters}
           onChange={(next) => navigate({ filters: next, sort })}
         />
+        <ColumnPicker columns={columns} hidden={hidden} onChange={setHidden} />
         <Button size="sm" variant="outline" onClick={exportCsv} disabled={exporting}>
           <Download />
           {exporting ? "Preparing CSV" : "Download CSV"}
         </Button>
       </div>
       <FormError error={error} mono />
+      {notice && <p className="text-xs text-primary">{notice}</p>}
       <PendingChangesBar
         count={edits.edits.size}
         sql={edits.sql}
@@ -195,17 +211,51 @@ export function DataGrid({
         sort={gridSort}
         onSort={onSort}
         linkFor={linkFor}
+        hidden={hidden}
+        widthsKey={`db-web:widths:${rel.database}.${rel.schema}.${rel.table}`}
+        onOpenRow={setOpenRow}
         {...(editable
           ? { selected, onSelect: setSelected, edits: edits.edits, onEdit: edits.edit }
           : {})}
         className="max-h-[70vh]"
       />
 
+      <RowDetail
+        title={`${rel.schema}.${rel.table}`}
+        columns={columns}
+        types={defs.map((d) => d.type)}
+        rows={rows}
+        row={openRow}
+        onChange={setOpenRow}
+        {...(editable
+          ? {
+              onDuplicate: (values: Record<string, Cell>) => {
+                setOpenRow(null);
+                setInserting({ initial: values });
+              },
+            }
+          : {})}
+      />
+
+      {importing && (
+        <ImportCsvDialog
+          rel={rel}
+          columns={columnMeta}
+          onClose={() => setImporting(false)}
+          onDone={(count) => {
+            setImporting(false);
+            setNotice(`Inserted ${count} row${count === 1 ? "" : "s"}.`);
+            router.refresh();
+          }}
+        />
+      )}
+
       {inserting && (
         <InsertRowDialog
           rel={rel}
           columns={columnMeta}
           primaryKey={primaryKey}
+          initial={inserting.initial}
           onClose={() => setInserting(false)}
           onDone={() => {
             setInserting(false);

@@ -1,7 +1,8 @@
 "use client";
 
 import { PostgreSQL, sql as sqlLang } from "@codemirror/lang-sql";
-import { EditorView } from "@codemirror/view";
+import { Prec } from "@codemirror/state";
+import { EditorView, keymap } from "@codemirror/view";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import {
   BookmarkPlus,
@@ -13,12 +14,21 @@ import {
   Pencil,
   Play,
   Save,
+  Square,
   Trash2,
   WandSparkles,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type ReactNode, useMemo, useRef, useState, useTransition } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { format } from "sql-formatter";
 import {
   clearHistoryAction,
@@ -29,6 +39,7 @@ import {
 } from "@/app/actions/query";
 import { deleteSavedQueryAction, saveQueryAction } from "@/app/actions/saved-queries";
 import { FormError } from "@/components/form-error";
+import { PlanTree } from "@/components/plan-tree";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +57,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { editorTheme } from "@/lib/editor-theme";
 import type { CompletionSchema } from "@/lib/queries";
 import type { HistoryEntry } from "@/lib/query-history";
+import type { StatementResult } from "@/lib/run-query";
 import type { SavedQuery } from "@/lib/saved-queries";
+import { splitStatements, statementAt } from "@/lib/sql-split";
 import { cn } from "@/lib/utils";
 import { ResultsGrid } from "./results-grid";
 
@@ -72,15 +85,37 @@ export function SqlEditor({
   const [runId, setRunId] = useState(0);
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [pane, setPane] = useState<"results" | "plan">("results");
+  const [resultTab, setResultTab] = useState(0);
+  const [token, setToken] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [sideOpen, setSideOpen] = useState(true);
   const [saveName, setSaveName] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savingOpen, setSavingOpen] = useState(false);
   const [pending, start] = useTransition();
   const ref = useRef<ReactCodeMirrorRef>(null);
+  const runRef = useRef<(scope: "cursor" | "all") => void>(() => {});
 
   const extensions = useMemo(
     () => [
+      Prec.highest(
+        keymap.of([
+          {
+            key: "Mod-Enter",
+            run: () => {
+              runRef.current("cursor");
+              return true;
+            },
+          },
+          {
+            key: "Mod-Shift-Enter",
+            run: () => {
+              runRef.current("all");
+              return true;
+            },
+          },
+        ]),
+      ),
       sqlLang({
         dialect: PostgreSQL,
         schema: completion,
@@ -93,23 +128,56 @@ export function SqlEditor({
     [completion],
   );
 
-  function currentSql() {
+  function currentSql(scope: "cursor" | "all" = "cursor") {
     const view = ref.current?.view;
     const sel = view?.state.selection.main;
     const selected = sel && !sel.empty ? view.state.sliceDoc(sel.from, sel.to) : "";
-    return selected || text;
+    if (selected) return selected;
+    if (scope === "cursor" && sel && splitStatements(text).length > 1) {
+      return statementAt(text, sel.head)?.text ?? text;
+    }
+    return text;
   }
 
-  function run(nextLimit = DEFAULT_LIMIT) {
-    const query = currentSql();
+  const statementCount = splitStatements(text).length;
+
+  function run(nextLimit = DEFAULT_LIMIT, scope: "cursor" | "all" = "cursor") {
+    const query = currentSql(scope);
+    const id = crypto.randomUUID();
     setLimit(nextLimit);
     setPane("results");
+    setResultTab(0);
+    setCancelError(null);
+    setToken(id);
     start(async () => {
-      setResponse(await executeQuery(database, query, nextLimit));
+      const res = await executeQuery(database, query, nextLimit, id);
+      setToken(null);
+      setResponse(res);
+      if (res.ok) setResultTab(Math.max(0, res.results.length - 1));
       setRunId((n) => n + 1);
       router.refresh();
     });
   }
+
+  useEffect(() => {
+    runRef.current = (scope) => run(DEFAULT_LIMIT, scope);
+  });
+
+  async function cancel() {
+    if (!token) return;
+    const res = await fetch("/api/query/cancel", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!body.ok) setCancelError(body.error ?? `cancel failed (${res.status})`);
+  }
+
+  const current: StatementResult | null = response?.ok
+    ? (response.results[resultTab] ?? null)
+    : null;
+  const result = current?.ok ? current.outcome : null;
 
   function runExplain(analyze: boolean) {
     setPane("plan");
@@ -138,30 +206,60 @@ export function SqlEditor({
     });
   }
 
-  const status = response?.ok
-    ? response.result.command
-      ? `${response.result.command}${response.result.rowCount !== null ? ` · ${response.result.rowCount} affected` : ""} · ${response.result.durationMs} ms`
-      : `${response.result.rows.length} row${response.result.rows.length === 1 ? "" : "s"}${response.result.truncated ? ` (capped at ${limit})` : ""} · ${response.result.durationMs} ms`
+  const status = result
+    ? result.command
+      ? `${result.command}${result.rowCount !== null ? ` · ${result.rowCount} affected` : ""} · ${result.durationMs} ms`
+      : `${result.rows.length} row${result.rows.length === 1 ? "" : "s"}${result.truncated ? ` (capped at ${limit})` : ""} · ${result.durationMs} ms`
     : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button size="sm" onClick={() => run()} disabled={pending}>
-              {pending ? <Loader2 className="animate-spin" /> : <Play />}
-              Run
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="flex items-center gap-2">
-            Runs the selection if there is one
-            <KbdGroup>
-              <Kbd>⌘</Kbd>
-              <Kbd>↵</Kbd>
-            </KbdGroup>
-          </TooltipContent>
-        </Tooltip>
+        {pending && token ? (
+          <Button size="sm" variant="destructive" onClick={cancel}>
+            <Square />
+            Cancel
+          </Button>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="sm" onClick={() => run()} disabled={pending}>
+                {pending ? <Loader2 className="animate-spin" /> : <Play />}
+                Run
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="flex items-center gap-2">
+              Runs the selection, else the statement at the cursor
+              <KbdGroup>
+                <Kbd>⌘</Kbd>
+                <Kbd>↵</Kbd>
+              </KbdGroup>
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {statementCount > 1 && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => run(DEFAULT_LIMIT, "all")}
+                disabled={pending}
+              >
+                Run all ({statementCount})
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="flex items-center gap-2">
+              Runs every statement in order, stops at the first error
+              <KbdGroup>
+                <Kbd>⌘</Kbd>
+                <Kbd>⇧</Kbd>
+                <Kbd>↵</Kbd>
+              </KbdGroup>
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {cancelError && <span className="text-xs text-destructive">{cancelError}</span>}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" variant="outline" disabled={pending}>
@@ -244,12 +342,6 @@ export function SqlEditor({
                 theme="none"
                 extensions={extensions}
                 onChange={setText}
-                onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                    e.preventDefault();
-                    run();
-                  }
-                }}
                 basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: true }}
                 placeholder="select * from ..."
               />
@@ -267,38 +359,65 @@ export function SqlEditor({
                     <TabsTrigger value="plan">Plan</TabsTrigger>
                   </TabsList>
                   <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-                    {response?.ok && response.result.source && (
+                    {result?.source && (
                       <Badge variant="outline" className="font-mono text-[10px]">
                         <Pencil />
-                        {response.result.source.schema}.{response.result.source.table}
+                        {result.source.schema}.{result.source.table}
                       </Badge>
                     )}
                     {status}
-                    {response?.ok && response.result.truncated && (
+                    {result?.truncated && (
                       <Button variant="link" size="xs" onClick={() => run(limit * 10)}>
                         show up to {limit * 10}
                       </Button>
                     )}
                   </div>
                 </div>
-                <TabsContent value="results" className="min-h-0 flex-1">
+                <TabsContent value="results" className="flex min-h-0 flex-1 flex-col">
                   {!response && <Empty>Run a query to see results here.</Empty>}
                   {response && !response.ok && (
                     <div className="p-3">
                       <FormError error={response.error} mono />
                     </div>
                   )}
-                  {response?.ok && response.result.columns.length > 0 && (
+                  {response?.ok && response.results.length > 1 && (
+                    <div className="flex shrink-0 flex-wrap gap-1 border-b px-2 py-1">
+                      {response.results.map((r, i) => (
+                        <button
+                          type="button"
+                          // biome-ignore lint/suspicious/noArrayIndexKey: statements are positional
+                          key={i}
+                          onClick={() => setResultTab(i)}
+                          title={r.sql}
+                          className={cn(
+                            "rounded px-2 py-0.5 font-mono text-[11px]",
+                            i === resultTab
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:bg-muted",
+                            !r.ok && "text-destructive",
+                          )}
+                        >
+                          {i + 1}. {statementLabel(r)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {current && !current.ok && (
+                    <div className="p-3">
+                      <FormError error={current.error} mono />
+                    </div>
+                  )}
+                  {result && result.columns.length > 0 && (
                     <ResultsGrid
-                      key={runId}
+                      key={`${runId}:${resultTab}`}
                       database={database}
-                      columns={response.result.columns}
-                      rows={response.result.rows}
-                      source={response.result.source}
-                      links={response.result.links}
+                      columns={result.columns}
+                      rows={result.rows}
+                      source={result.source}
+                      links={result.links}
                     />
                   )}
-                  {response?.ok && response.result.columns.length === 0 && <Empty>{status}</Empty>}
+                  {result && result.columns.length === 0 && <Empty>{status}</Empty>}
                 </TabsContent>
                 <TabsContent value="plan" className="min-h-0 flex-1">
                   {!explain && <Empty>Explain a statement to see its plan here.</Empty>}
@@ -307,14 +426,7 @@ export function SqlEditor({
                       <FormError error={explain.error} mono />
                     </div>
                   )}
-                  {explain?.ok && (
-                    <ScrollArea className="h-full">
-                      <div className="px-3 pt-2 text-xs text-muted-foreground">
-                        plan in {explain.durationMs} ms
-                      </div>
-                      <pre className="p-3 font-mono text-xs leading-relaxed">{explain.plan}</pre>
-                    </ScrollArea>
-                  )}
+                  {explain?.ok && <PlanTree plan={explain.plan} durationMs={explain.durationMs} />}
                 </TabsContent>
               </Tabs>
             </ResizablePanel>
@@ -431,6 +543,13 @@ export function SqlEditor({
       </ResizablePanelGroup>
     </div>
   );
+}
+
+function statementLabel(r: StatementResult): string {
+  if (!r.ok) return "error";
+  const o = r.outcome;
+  if (o.command) return `${o.command}${o.rowCount !== null ? ` ${o.rowCount}` : ""}`;
+  return `${o.rows.length} row${o.rows.length === 1 ? "" : "s"}`;
 }
 
 function Empty({ children }: { children: ReactNode }) {

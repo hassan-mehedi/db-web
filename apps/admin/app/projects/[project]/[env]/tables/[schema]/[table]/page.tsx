@@ -5,6 +5,7 @@ import { AddConstraintDialog, DropConstraintButton } from "@/components/constrai
 import { DataGrid } from "@/components/data-grid";
 import { DropTableDialog } from "@/components/drop-table-dialog";
 import { CreateIndexDialog, DropIndexButton } from "@/components/index-dialogs";
+import { DependenciesTab, PoliciesTab, TriggersTab } from "@/components/table-security";
 import { TableTabs, TabSkeleton } from "@/components/table-tabs";
 import { TablesLayout } from "@/components/tables-layout";
 import {
@@ -29,6 +30,8 @@ import {
   getSchemasWithTables,
   getTableData,
   getTableDetails,
+  getTableExtras,
+  prettyBytes,
 } from "@/lib/queries";
 import { envPath, projectPath, tablePath, tablesPath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
@@ -36,7 +39,15 @@ import { parseFilters, parseSort } from "@/lib/table-filters";
 
 export const dynamic = "force-dynamic";
 
-const TABS = ["data", "columns", "constraints", "indexes"] as const;
+const TABS = [
+  "data",
+  "columns",
+  "constraints",
+  "indexes",
+  "triggers",
+  "policies",
+  "dependencies",
+] as const;
 type Tab = (typeof TABS)[number];
 
 const CONSTRAINT_TYPES: Record<string, string> = {
@@ -71,7 +82,11 @@ export default async function TablePage({
     return `${base}?${q}`;
   };
 
-  const schemas = await getSchemasWithTables(database);
+  const [schemas, extras] = await Promise.all([
+    getSchemasWithTables(database),
+    getTableExtras(database, schema, table),
+  ]);
+  const stats = extras.stats;
 
   return (
     <TablesLayout
@@ -85,10 +100,38 @@ export default async function TablePage({
         { label: `${schema}.${table}` },
       ]}
     >
+      {stats && (
+        <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground">
+          <span title="live rows from pg_stat_user_tables, updated by analyze">
+            ~{Number(stats.live).toLocaleString()} rows
+          </span>
+          <span
+            title={`table ${prettyBytes(Number(stats.table_bytes))}, indexes ${prettyBytes(Number(stats.index_bytes))}`}
+          >
+            {prettyBytes(Number(stats.total_bytes))}
+          </span>
+          {Number(stats.dead) > 0 && <span>{Number(stats.dead).toLocaleString()} dead rows</span>}
+          <span>
+            {Number(stats.seq_scan).toLocaleString()} seq /{" "}
+            {Number(stats.idx_scan).toLocaleString()} idx scans
+          </span>
+          {(stats.last_autovacuum ?? stats.last_vacuum) && (
+            <span>
+              vacuumed{" "}
+              {(stats.last_autovacuum ?? stats.last_vacuum ?? "").slice(0, 16).replace("T", " ")}
+            </span>
+          )}
+        </div>
+      )}
       <TableTabs
         base={base}
         tabs={TABS}
         active={tab}
+        counts={{
+          triggers: extras.triggers.length,
+          policies: extras.policies.length,
+          dependencies: extras.dependencies.length,
+        }}
         actions={<DropTableDialog database={database} schema={schema} table={table} />}
       >
         <Suspense
@@ -105,6 +148,7 @@ export default async function TablePage({
             exact={exact}
             dataQuery={dataQuery}
             schemas={schemas}
+            extras={extras}
           />
         </Suspense>
       </TableTabs>
@@ -142,6 +186,7 @@ async function TabBody({
   exact,
   dataQuery,
   schemas,
+  extras,
 }: {
   database: string;
   schema: string;
@@ -152,6 +197,7 @@ async function TabBody({
   exact: boolean;
   dataQuery: (extra: Record<string, string | undefined>) => string;
   schemas: Awaited<ReturnType<typeof getSchemasWithTables>>;
+  extras: Awaited<ReturnType<typeof getTableExtras>>;
 }) {
   const [details, allColumns] = await Promise.all([
     getTableDetails(database, schema, table),
@@ -289,6 +335,14 @@ async function TabBody({
           </Table>
         </div>
       )}
+
+      {tab === "triggers" && <TriggersTab rel={rel} triggers={extras.triggers} />}
+
+      {tab === "policies" && (
+        <PoliciesTab rel={rel} policies={extras.policies} rowSecurity={extras.rowSecurity} />
+      )}
+
+      {tab === "dependencies" && <DependenciesTab rel={rel} dependencies={extras.dependencies} />}
 
       {tab === "indexes" && (
         <div className="grid gap-3">

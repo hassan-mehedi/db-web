@@ -10,11 +10,15 @@ What you get:
 
 - Projects and envs: create, clone (`CREATE DATABASE ... TEMPLATE`), drop, with
   the SQL shown before it runs.
-- Per env: tables with DDL dialogs (columns, constraints, indexes), a data grid
-  with keyset paging, a SQL editor with explain, history and saved queries, an
-  ER diagram, roles, a Connect page with PostgREST and psql strings, and a
-  Monitoring page (connections, cache hit, size, slow statements from
-  `pg_stat_statements`, active sessions).
+- Per env: tables with DDL dialogs (columns, constraints, indexes), read and
+  drop for triggers and RLS policies, a dependencies view, a data grid with
+  keyset paging, filters, inline edit, row detail, column hide and resize, CSV
+  export and import, a SQL editor with autocomplete, run-at-cursor, per
+  statement result tabs, cancel, an explain plan tree, history and saved
+  queries, an ER diagram, roles, a Connect page with PostgREST and psql
+  strings, and a Monitoring page (connections, cache hit, size, slow statements
+  from `pg_stat_statements`, lock waits, active sessions, dead rows, unused
+  indexes).
 - One admin user, password plus TOTP, created in the browser on first run.
 - The app's own state (auth, saved queries, one-minute metric samples) lives in
   a `db_web_meta` database on the same server. The app user `app_admin` has

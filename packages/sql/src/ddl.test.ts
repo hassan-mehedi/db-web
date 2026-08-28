@@ -3,10 +3,13 @@ import {
   alterColumn,
   alterColumns,
   createTable,
+  dropPolicy,
   dropTable,
+  dropTrigger,
   isSafeExpression,
   isSerialType,
   isValidType,
+  setRowSecurity,
   supportsIdentity,
 } from "./ddl";
 
@@ -224,4 +227,24 @@ describe("alterColumn", () => {
       ]),
     ).toHaveLength(2));
   it("dropTable", () => expect(dropTable("api", "x")).toBe('DROP TABLE "api"."x"'));
+});
+
+describe("triggers, policies and row security", () => {
+  it("quotes identifiers in drop statements", () => {
+    expect(dropTrigger("public", "items", "Set Updated")).toBe(
+      'DROP TRIGGER "Set Updated" ON "public"."items"',
+    );
+    expect(dropPolicy("public", "items", "owner-only")).toBe(
+      'DROP POLICY "owner-only" ON "public"."items"',
+    );
+  });
+
+  it("toggles row level security", () => {
+    expect(setRowSecurity("public", "items", true)).toBe(
+      'ALTER TABLE "public"."items" ENABLE ROW LEVEL SECURITY',
+    );
+    expect(setRowSecurity("public", "items", false)).toBe(
+      'ALTER TABLE "public"."items" DISABLE ROW LEVEL SECURITY',
+    );
+  });
 });

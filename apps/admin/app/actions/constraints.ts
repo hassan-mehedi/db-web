@@ -12,6 +12,9 @@ import {
   createIndex,
   dropConstraint,
   dropIndex,
+  dropPolicy,
+  dropTrigger,
+  setRowSecurity,
 } from "@db-web/sql";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/app/actions/cluster";
@@ -101,6 +104,48 @@ export async function dropConstraintAction(
     database,
     "drop-constraint",
     dropConstraint(schema, table, name),
+    rel(database, schema, table),
+  );
+}
+
+export async function dropTriggerAction(
+  database: string,
+  schema: string,
+  table: string,
+  name: string,
+) {
+  return run(
+    database,
+    "drop-trigger",
+    dropTrigger(schema, table, name),
+    rel(database, schema, table),
+  );
+}
+
+export async function dropPolicyAction(
+  database: string,
+  schema: string,
+  table: string,
+  name: string,
+) {
+  return run(
+    database,
+    "drop-policy",
+    dropPolicy(schema, table, name),
+    rel(database, schema, table),
+  );
+}
+
+export async function setRowSecurityAction(
+  database: string,
+  schema: string,
+  table: string,
+  enabled: boolean,
+) {
+  return run(
+    database,
+    enabled ? "enable-rls" : "disable-rls",
+    setRowSecurity(schema, table, enabled),
     rel(database, schema, table),
   );
 }

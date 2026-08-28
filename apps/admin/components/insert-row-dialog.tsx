@@ -48,6 +48,21 @@ function initialMode(c: ColumnRow): Mode {
   return "value";
 }
 
+function initialField(
+  c: ColumnRow,
+  primaryKey: string[],
+  initial: Record<string, Cell> | undefined,
+): Field {
+  const generated =
+    c.identity_generation === "ALWAYS" || (primaryKey.includes(c.column_name) && hasDefault(c));
+  if (!initial || !(c.column_name in initial) || generated) {
+    return { mode: initialMode(c), text: "" };
+  }
+  const value = initial[c.column_name] ?? null;
+  if (value === null) return { mode: c.is_nullable === "YES" ? "null" : initialMode(c), text: "" };
+  return { mode: "value", text: value };
+}
+
 function placeholderFor(c: ColumnRow, mode: Mode) {
   if (mode === "value") return "";
   if (mode === "null") return "NULL";
@@ -58,17 +73,19 @@ export function InsertRowDialog({
   rel,
   columns,
   primaryKey,
+  initial,
   onClose,
   onDone,
 }: {
   rel: Rel;
   columns: ColumnRow[];
   primaryKey: string[];
+  initial?: Record<string, Cell> | undefined;
   onClose: () => void;
   onDone: () => void;
 }) {
   const [values, setValues] = useState<Record<string, Field>>(
-    Object.fromEntries(columns.map((c) => [c.column_name, { mode: initialMode(c), text: "" }])),
+    Object.fromEntries(columns.map((c) => [c.column_name, initialField(c, primaryKey, initial)])),
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -96,14 +113,15 @@ export function InsertRowDialog({
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            Insert row into{" "}
+            {initial ? "Duplicate row into" : "Insert row into"}{" "}
             <span className="font-mono">
               {rel.schema}.{rel.table}
             </span>
           </DialogTitle>
           <DialogDescription>
-            Start typing to set a value. Empty fields use the column default, or NULL when there is
-            none.
+            {initial
+              ? "Values copied from the selected row. Generated keys keep their default."
+              : "Start typing to set a value. Empty fields use the column default, or NULL when there is none."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">

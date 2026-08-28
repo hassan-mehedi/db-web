@@ -34,7 +34,7 @@ test("login with TOTP, create, use, clone and drop a database", async ({ page })
   await expect(page.locator('tbody tr td[data-col="0"]').first()).toHaveText("1");
   await page.click("button:has-text('Explain')");
   await page.click("[role=menuitem]:text-is('Explain')");
-  await expect(page.locator("pre")).toContainText("Result");
+  await expect(page.locator("[data-plan-node]").first()).toContainText("Result");
   await page.click("button:has-text('History')");
   await expect(page.locator("main aside")).toContainText("select 1 as one");
 

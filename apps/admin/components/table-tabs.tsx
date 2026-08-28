@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useState, useTransition } from "react";
+import { type ReactNode, useEffect, useState, useTransition } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { rememberTab } from "@/lib/last-tab";
 
 export function TabSkeleton({ rows = 5 }: { rows?: number }) {
   return (
@@ -21,12 +22,14 @@ export function TableTabs<T extends string>({
   base,
   tabs,
   active,
+  counts,
   actions,
   children,
 }: {
   base: string;
   tabs: readonly T[];
   active: T;
+  counts?: Partial<Record<T, number>>;
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -34,6 +37,7 @@ export function TableTabs<T extends string>({
   const [pending, start] = useTransition();
   const [target, setTarget] = useState<T | null>(null);
   const shown = pending && target ? target : active;
+  useEffect(() => rememberTab(base, active), [base, active]);
 
   return (
     <>
@@ -52,6 +56,9 @@ export function TableTabs<T extends string>({
             }}
           >
             {t}
+            {counts?.[t] ? (
+              <span className="ml-1 text-xs text-muted-foreground">{counts[t]}</span>
+            ) : null}
           </Link>
         ))}
         <div className="ml-auto pb-2">{actions}</div>

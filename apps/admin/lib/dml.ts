@@ -92,6 +92,25 @@ export async function insertRow(rel: Rel, values: Record<string, Cell>) {
   });
 }
 
+export async function insertRows(rel: Rel, columns: string[], rows: Cell[][]) {
+  if (columns.length === 0) throw new Error("pick at least one column");
+  if (rows.length === 0) throw new Error("nothing to insert");
+  const target = quoteQualified(rel.schema, rel.table);
+  const cols = columns.map(ident).join(", ");
+  const text = `INSERT INTO ${target} (${cols}) VALUES (${columns.map((_, i) => `$${i + 1}`).join(", ")})`;
+  return withClient(rel.database, async (c) => {
+    await c.query("BEGIN");
+    try {
+      for (const row of rows) await c.query(text, row);
+      await c.query("COMMIT");
+    } catch (err) {
+      await c.query("ROLLBACK");
+      throw err;
+    }
+    return `${text}\n-- ${rows.length} rows`;
+  });
+}
+
 export async function deleteRows(rel: Rel, keys: RowKey[]) {
   if (keys.length === 0) throw new Error("nothing to delete");
   return withClient(rel.database, async (c) => {

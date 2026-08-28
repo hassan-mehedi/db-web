@@ -158,3 +158,15 @@ export function alterColumn(schema: string, table: string, change: ColumnChange)
 export function alterColumns(schema: string, table: string, changes: ColumnChange[]): string[] {
   return changes.map((c) => alterColumn(schema, table, c));
 }
+
+export function dropTrigger(schema: string, table: string, name: string): string {
+  return `DROP TRIGGER ${quoteIdent(name)} ON ${quoteQualified(schema, table)}`;
+}
+
+export function dropPolicy(schema: string, table: string, name: string): string {
+  return `DROP POLICY ${quoteIdent(name)} ON ${quoteQualified(schema, table)}`;
+}
+
+export function setRowSecurity(schema: string, table: string, enabled: boolean): string {
+  return `ALTER TABLE ${quoteQualified(schema, table)} ${enabled ? "ENABLE" : "DISABLE"} ROW LEVEL SECURITY`;
+}

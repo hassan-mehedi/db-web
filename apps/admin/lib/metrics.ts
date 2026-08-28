@@ -1,5 +1,13 @@
-import { maintenancePool } from "@db-web/db";
-import { databaseStats, hasStatStatements, listActivity, topStatements } from "@db-web/sql";
+import { maintenancePool, poolFor } from "@db-web/db";
+import {
+  bloatedTables,
+  databaseStats,
+  hasStatStatements,
+  listActivity,
+  lockWaits,
+  topStatements,
+  unusedIndexes,
+} from "@db-web/sql";
 import { meta } from "./meta-db";
 import { timed } from "./timing";
 
@@ -242,4 +250,58 @@ export async function lastSampleAt(): Promise<string | null> {
     "SELECT max(ts)::text AS ts FROM metric_sample",
   );
   return rows[0]?.ts ?? null;
+}
+
+export interface LockWaitRow {
+  waiting_pid: number;
+  waiting_user: string | null;
+  waiting_query: string;
+  wait_event_type: string | null;
+  wait_event: string | null;
+  waiting_seconds: number;
+  blocking_pid: number;
+  blocking_user: string | null;
+  blocking_state: string | null;
+  blocking_query: string;
+}
+
+export function getLockWaits(database: string): Promise<LockWaitRow[]> {
+  return timed("locks", async () => {
+    const { rows } = await poolFor(database).query<LockWaitRow>(lockWaits);
+    return rows;
+  });
+}
+
+export interface BloatRow {
+  schema: string;
+  table: string;
+  live: string;
+  dead: string;
+  dead_pct: string;
+  seq_scan: string;
+  idx_scan: string;
+  last_vacuum: string | null;
+  total_bytes: string;
+}
+
+export function getBloat(database: string, limit = 15): Promise<BloatRow[]> {
+  return timed("bloat", async () => {
+    const { rows } = await poolFor(database).query<BloatRow>(bloatedTables, [limit]);
+    return rows;
+  });
+}
+
+export interface UnusedIndexRow {
+  schema: string;
+  table: string;
+  index: string;
+  scans: string;
+  bytes: string;
+}
+
+export function getUnusedIndexes(database: string, limit = 15): Promise<UnusedIndexRow[]> {
+  return timed("unused-indexes", async () => {
+    const { rows } = await poolFor(database).query<UnusedIndexRow>(unusedIndexes, [1, limit]);
+    return rows;
+  });
 }

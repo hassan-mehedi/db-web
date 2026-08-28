@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ActivityTable } from "@/components/activity-table";
 import { AppShell } from "@/components/app-shell";
 import { LineChart } from "@/components/line-chart";
+import { LockWaits } from "@/components/lock-waits";
 import {
   Table,
   TableBody,
@@ -13,15 +14,18 @@ import {
 import { type EnvParams, resolveDatabase } from "@/lib/env-params";
 import {
   getActivity,
+  getBloat,
+  getLockWaits,
   getSeries,
   getTopStatements,
+  getUnusedIndexes,
   lastSampleAt,
   statStatementsAvailable,
   WINDOWS,
   type Window,
 } from "@/lib/metrics";
 import { envLabel } from "@/lib/projects";
-import { envPath, monitoringPath, projectPath, queryPath } from "@/lib/routes";
+import { envPath, monitoringPath, projectPath, queryPath, tablePath } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -47,12 +51,15 @@ export default async function MonitoringPage({
   const sp = await searchParams;
   const window: Window = WINDOWS.includes(sp.w as Window) ? (sp.w as Window) : "1h";
 
-  const [series, statements, activity, hasExt, lastAt] = await Promise.all([
+  const [series, statements, activity, hasExt, lastAt, locks, bloat, unused] = await Promise.all([
     getSeries(database, window),
     getTopStatements(database),
     getActivity(database),
     statStatementsAvailable(),
     lastSampleAt(),
+    getLockWaits(database),
+    getBloat(database),
+    getUnusedIndexes(database),
   ]);
   const labels = series.map((p) => p.ts.slice(window === "7d" ? 5 : 11, 16));
   const latest = series.at(-1);
@@ -193,7 +200,111 @@ export default async function MonitoringPage({
         )}
       </section>
 
+      <div className="mb-8">
+        <LockWaits database={database} rows={locks} />
+      </div>
+
       <ActivityTable database={database} rows={activity} />
+
+      <section className="mt-8 mb-8 grid gap-2">
+        <h2 className="text-sm font-medium">Tables by dead rows</h2>
+        <p className="text-xs text-muted-foreground">
+          Dead rows wait for vacuum. A high share with an old vacuum time means bloat. Many seq
+          scans on a big table usually means a missing index.
+        </p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>table</TableHead>
+              <TableHead>live</TableHead>
+              <TableHead>dead</TableHead>
+              <TableHead>dead %</TableHead>
+              <TableHead>seq / idx scans</TableHead>
+              <TableHead>last vacuum</TableHead>
+              <TableHead>size</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {bloat.map((b) => {
+              const pct = Number(b.dead_pct);
+              return (
+                <TableRow key={`${b.schema}.${b.table}`}>
+                  <TableCell className="font-mono text-xs">
+                    <Link href={tablePath(database, b.schema, b.table)} className="text-primary">
+                      {b.schema}.{b.table}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-xs">{Number(b.live).toLocaleString()}</TableCell>
+                  <TableCell className="text-xs">{Number(b.dead).toLocaleString()}</TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-xs",
+                      pct >= 20 && "text-amber-600 dark:text-amber-400",
+                      pct >= 50 && "text-destructive",
+                    )}
+                  >
+                    {b.dead_pct}%
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {Number(b.seq_scan).toLocaleString()} / {Number(b.idx_scan).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-xs whitespace-nowrap">
+                    {b.last_vacuum ? b.last_vacuum.slice(0, 16).replace("T", " ") : "never"}
+                  </TableCell>
+                  <TableCell className="text-xs">{bytes(Number(b.total_bytes))}</TableCell>
+                </TableRow>
+              );
+            })}
+            {bloat.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-muted-foreground">
+                  No user tables.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+
+      <section className="mb-8 grid gap-2">
+        <h2 className="text-sm font-medium">Indexes never scanned</h2>
+        <p className="text-xs text-muted-foreground">
+          Non-unique indexes with zero scans since the last stats reset. Each one costs write time
+          and disk. Check the age of the stats before dropping anything.
+        </p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>index</TableHead>
+              <TableHead>table</TableHead>
+              <TableHead>size</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {unused.map((u) => (
+              <TableRow key={`${u.schema}.${u.index}`}>
+                <TableCell className="font-mono text-xs">{u.index}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  <Link
+                    href={`${tablePath(database, u.schema, u.table)}?tab=indexes`}
+                    className="text-primary"
+                  >
+                    {u.schema}.{u.table}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-xs">{bytes(Number(u.bytes))}</TableCell>
+              </TableRow>
+            ))}
+            {unused.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={3} className="text-muted-foreground">
+                  Every non-unique index has been used.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
     </AppShell>
   );
 }

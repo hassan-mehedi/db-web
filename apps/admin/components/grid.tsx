@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ArrowUpRight, KeyRound, Link2, Lock } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, KeyRound, Link2, Lock, Maximize2 } from "lucide-react";
 import Link from "next/link";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useColumnWidths } from "@/lib/column-widths";
 import type { Cell } from "@/lib/format";
 import { editKey, type PendingEdits } from "@/lib/pending-edits";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,9 @@ interface Props {
   onSort?: (next: GridSort) => void;
   linkFor?: (col: number, value: string) => string | null;
   search?: string;
+  hidden?: Set<number>;
+  widthsKey?: string;
+  onOpenRow?: (row: number) => void;
   selected?: Set<number>;
   onSelect?: (next: Set<number>) => void;
   edits?: PendingEdits;
@@ -35,7 +39,14 @@ interface Props {
   className?: string;
 }
 
-const CELL = "h-8 max-w-xs truncate border-r border-b px-2.5 font-mono text-xs last:border-r-0";
+const CELL = "h-8 truncate border-r border-b px-2.5 font-mono text-xs last:border-r-0";
+const MIN_WIDTH = 48;
+const FIRST =
+  "sticky left-0 z-[1] border-r border-b px-2 text-center font-mono text-[10px] text-muted-foreground";
+
+function widthStyle(width: number | undefined) {
+  return width ? { width, minWidth: width, maxWidth: width } : undefined;
+}
 
 export function Grid({
   columns,
@@ -45,6 +56,9 @@ export function Grid({
   onSort,
   linkFor,
   search = "",
+  hidden,
+  widthsKey,
+  onOpenRow,
   selected,
   onSelect,
   edits,
@@ -58,6 +72,38 @@ export function Grid({
   const [editing, setEditing] = useState<{ row: number; col: number } | null>(null);
   const [draft, setDraft] = useState("");
   const tableRef = useRef<HTMLTableElement>(null);
+
+  const names = useMemo(() => columns.map((c) => c.name), [columns]);
+  const [widths, setWidth] = useColumnWidths(widthsKey, names);
+  const drag = useRef<{ col: number; startX: number; startWidth: number } | null>(null);
+
+  function startResize(e: PointerEvent<HTMLElement>, col: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = e.currentTarget.parentElement;
+    if (!th) return;
+    drag.current = { col, startX: e.clientX, startWidth: th.getBoundingClientRect().width };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function moveResize(e: PointerEvent<HTMLElement>) {
+    const d = drag.current;
+    if (!d) return;
+    setWidth(d.col, Math.max(MIN_WIDTH, Math.round(d.startWidth + e.clientX - d.startX)));
+  }
+
+  function endResize() {
+    drag.current = null;
+  }
+
+  const visible = useMemo(
+    () => columns.map((_, i) => i).filter((i) => !hidden?.has(i)),
+    [columns, hidden],
+  );
+  const step = (col: number, dc: number) => {
+    const pos = visible.indexOf(col);
+    return visible[Math.min(visible.length - 1, Math.max(0, pos + dc))] ?? col;
+  };
 
   const valueAt = (row: number, col: number): Cell =>
     edits?.has(editKey(row, col))
@@ -126,8 +172,7 @@ export function Grid({
       e.preventDefault();
       const pos = order.indexOf(row);
       const nextRow = order[Math.min(order.length - 1, Math.max(0, pos + dr))] ?? row;
-      const nextCol = Math.min(columns.length - 1, Math.max(0, col + dc));
-      setActive({ row: nextRow, col: nextCol });
+      setActive({ row: nextRow, col: step(col, dc) });
     };
     if (e.key === "ArrowDown") move(1, 0);
     else if (e.key === "ArrowUp") move(-1, 0);
@@ -136,6 +181,13 @@ export function Grid({
     else if (e.key === "Enter" || e.key === "F2") {
       e.preventDefault();
       startEdit(row, col);
+    } else if (e.key === " " && onOpenRow) {
+      e.preventDefault();
+      onOpenRow(row);
+    } else if (e.key === "c" && (e.metaKey || e.ctrlKey)) {
+      if (window.getSelection()?.toString()) return;
+      e.preventDefault();
+      void navigator.clipboard.writeText(valueAt(row, col) ?? "");
     } else if ((e.key === "Backspace" || e.key === "Delete") && columns[col]?.editable && onEdit) {
       e.preventDefault();
       if (valueAt(row, col) !== null) onEdit(row, col, null);
@@ -156,7 +208,7 @@ export function Grid({
       e.preventDefault();
       const pos = editing;
       commit(draft);
-      if (pos) setActive({ row: pos.row, col: Math.min(columns.length - 1, pos.col + 1) });
+      if (pos) setActive({ row: pos.row, col: step(pos.col, 1) });
     }
   }
 
@@ -173,7 +225,7 @@ export function Grid({
       <table ref={tableRef} className="w-max min-w-full border-separate border-spacing-0">
         <thead className="sticky top-0 z-10">
           <tr>
-            <th className="w-10 border-r border-b bg-muted/80 px-2 text-center backdrop-blur">
+            <th className={cn(FIRST, "z-20 bg-muted/80 backdrop-blur")}>
               {selectable ? (
                 <Checkbox
                   aria-label="select all rows"
@@ -184,16 +236,19 @@ export function Grid({
                 <span className="text-[10px] text-muted-foreground">#</span>
               )}
             </th>
-            {columns.map((c, i) => {
+            {visible.map((i) => {
+              const c = columns[i];
+              if (!c) return null;
               const sorted = sort?.col === i ? sort : null;
               return (
                 <th
-                  // biome-ignore lint/suspicious/noArrayIndexKey: result columns may repeat a name
                   key={`${i}-${c.name}`}
                   className={cn(
-                    "border-r border-b bg-muted/80 px-2.5 py-1.5 text-left align-middle backdrop-blur last:border-r-0",
+                    "relative border-r border-b bg-muted/80 px-2.5 py-1.5 text-left align-middle backdrop-blur last:border-r-0",
+                    !widths[i] && "max-w-xs",
                     sortable && "cursor-pointer select-none hover:bg-muted",
                   )}
+                  style={widthStyle(widths[i])}
                   onClick={() => toggleSort(i)}
                   aria-sort={sorted ? (sorted.desc ? "descending" : "ascending") : undefined}
                 >
@@ -221,6 +276,35 @@ export function Grid({
                       {c.type}
                     </div>
                   )}
+                  <button
+                    type="button"
+                    aria-label={`resize column ${c.name}`}
+                    title="Drag to resize, double-click to reset, arrow keys to adjust"
+                    className="absolute top-0 right-0 h-full w-2 cursor-col-resize touch-none select-none hover:bg-primary/40 focus-visible:bg-primary/40"
+                    onPointerDown={(e) => startResize(e, i)}
+                    onPointerMove={moveResize}
+                    onPointerUp={endResize}
+                    onPointerCancel={endResize}
+                    onClick={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      setWidth(i, null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const th = e.currentTarget.parentElement;
+                      const current = widths[i] ?? th?.getBoundingClientRect().width ?? MIN_WIDTH;
+                      setWidth(
+                        i,
+                        Math.max(
+                          MIN_WIDTH,
+                          Math.round(current + (e.key === "ArrowRight" ? 16 : -16)),
+                        ),
+                      );
+                    }}
+                  />
                 </th>
               );
             })}
@@ -237,18 +321,36 @@ export function Grid({
                 data-state={isSelected ? "selected" : undefined}
                 className="group hover:bg-muted/40 data-[state=selected]:bg-primary/8"
               >
-                <td className="w-10 border-r border-b px-2 text-center font-mono text-[10px] text-muted-foreground">
-                  {selectable ? (
-                    <Checkbox
-                      aria-label="select row"
-                      checked={isSelected}
-                      onCheckedChange={(c) => toggleRow(r, c === true)}
-                    />
-                  ) : (
-                    n + 1
+                <td
+                  className={cn(
+                    FIRST,
+                    "bg-card group-hover:bg-muted group-data-[state=selected]:bg-muted",
                   )}
+                >
+                  <span className="flex items-center justify-center gap-1">
+                    {selectable ? (
+                      <Checkbox
+                        aria-label="select row"
+                        checked={isSelected}
+                        onCheckedChange={(c) => toggleRow(r, c === true)}
+                      />
+                    ) : (
+                      n + 1
+                    )}
+                    {onOpenRow && (
+                      <button
+                        type="button"
+                        aria-label="open row"
+                        title="Open row (Space)"
+                        className="rounded p-0.5 opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+                        onClick={() => onOpenRow(r)}
+                      >
+                        <Maximize2 className="size-3" />
+                      </button>
+                    )}
+                  </span>
                 </td>
-                {row.map((_, c) => {
+                {visible.map((c) => {
                   const column = columns[c];
                   const changed = edits?.has(editKey(r, c)) ?? false;
                   const cell = valueAt(r, c);
@@ -258,14 +360,15 @@ export function Grid({
                   const href = cell !== null && linkFor ? linkFor(c, cell) : null;
                   return (
                     <td
-                      // biome-ignore lint/suspicious/noArrayIndexKey: cells are positional
                       key={`${c}-${column?.name ?? c}`}
                       data-row={r}
                       data-col={c}
                       tabIndex={isEditing ? -1 : 0}
                       title={isEditing ? undefined : (cell ?? "NULL")}
+                      style={widthStyle(widths[c])}
                       className={cn(
                         CELL,
+                        !widths[c] && "max-w-xs",
                         "outline-none",
                         isActive && !isEditing && "ring-2 ring-primary ring-inset",
                         isEditing && "p-0",
@@ -325,7 +428,7 @@ export function Grid({
           {order.length === 0 && (
             <tr>
               <td
-                colSpan={columns.length + 1}
+                colSpan={visible.length + 1}
                 className="h-24 text-center text-sm text-muted-foreground"
               >
                 {rows.length === 0 ? emptyText : "No rows match"}

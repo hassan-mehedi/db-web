@@ -1,4 +1,4 @@
-import { poolFor } from "@db-web/db";
+import { poolFor, withClient } from "@db-web/db";
 import { singleColumnForeignKeys } from "@db-web/sql";
 import type { FieldDef, PoolClient, QueryResult } from "pg";
 import Cursor from "pg-cursor";
@@ -93,21 +93,49 @@ async function resolveLinks(
   });
 }
 
+export type StatementResult =
+  | { sql: string; ok: true; outcome: QueryOutcome }
+  | { sql: string; ok: false; error: string };
+
+export async function runStatements(
+  database: string,
+  statements: string[],
+  limit: number,
+  onConnect?: (pid: number) => void,
+): Promise<StatementResult[]> {
+  const client = await poolFor(database).connect();
+  if (onConnect) {
+    const { rows } = await client.query<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+    if (rows[0]) onConnect(rows[0].pid);
+  }
+  const results: StatementResult[] = [];
+  try {
+    for (const sql of statements) {
+      try {
+        results.push({ sql, ok: true, outcome: await runStatement(client, sql, limit) });
+      } catch (err) {
+        results.push({ sql, ok: false, error: err instanceof Error ? err.message : String(err) });
+        break;
+      }
+    }
+  } finally {
+    client.release();
+  }
+  return results;
+}
+
 export async function runQuery(
   database: string,
   sql: string,
   limit: number,
 ): Promise<QueryOutcome> {
+  return withClient(database, (client) => runStatement(client, sql, limit));
+}
+
+async function runStatement(client: PoolClient, sql: string, limit: number): Promise<QueryOutcome> {
   const started = performance.now();
-  const client = await poolFor(database).connect();
-  try {
-    if (
-      RETURNS_ROWS.test(sql) &&
-      !sql
-        .trim()
-        .replace(/;+\s*$/, "")
-        .includes(";")
-    ) {
+  {
+    if (RETURNS_ROWS.test(sql)) {
       const cursor = client.query(new Cursor(sql.replace(/;+\s*$/, ""), [], { rowMode: "array" }));
       let read: { rows: unknown[][]; fields: FieldDef[] };
       try {
@@ -144,7 +172,5 @@ export async function runQuery(
       source: null,
       links: [],
     };
-  } finally {
-    client.release();
   }
 }

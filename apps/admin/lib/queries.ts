@@ -11,12 +11,17 @@ import {
   listDatabaseNames,
   listDatabasesWithConnections,
   listIndexes,
+  listPolicies,
   listSchemas,
+  listTriggers,
   orderBy,
   quoteIdent,
   quoteQualified,
+  rowSecurity,
   type Sort,
   singleColumnForeignKeys,
+  tableDependencies,
+  tableStats,
 } from "@db-web/sql";
 import { cache } from "react";
 import { type Cell, formatRows } from "./format";
@@ -308,4 +313,62 @@ export function getCompletionSchema(database: string): Promise<CompletionSchema>
     }
     return out;
   });
+}
+
+export interface TriggerRow {
+  name: string;
+  enabled: boolean;
+  definition: string;
+}
+
+export interface PolicyRow {
+  name: string;
+  cmd: string;
+  permissive: boolean;
+  roles: string[];
+  using: string | null;
+  withCheck: string | null;
+}
+
+export interface DependencyRow {
+  kind: "fk" | "view" | "matview";
+  schema: string;
+  name: string;
+  detail: string | null;
+}
+
+export interface TableStatsRow {
+  live: string;
+  dead: string;
+  seq_scan: string;
+  idx_scan: string;
+  last_vacuum: string | null;
+  last_autovacuum: string | null;
+  last_analyze: string | null;
+  last_autoanalyze: string | null;
+  total_bytes: string;
+  table_bytes: string;
+  index_bytes: string;
+}
+
+export async function getTableExtras(database: string, schema: string, table: string) {
+  return timed("table-extras", () =>
+    withClient(database, async (c) => {
+      const rel = quoteQualified(schema, table);
+      const [triggers, policies, rls, deps, stats] = await Promise.all([
+        c.query<TriggerRow>(listTriggers, [rel]),
+        c.query<PolicyRow>(listPolicies, [schema, table]),
+        c.query<{ enabled: boolean; forced: boolean }>(rowSecurity, [rel]),
+        c.query<DependencyRow>(tableDependencies, [rel]),
+        c.query<TableStatsRow>(tableStats, [rel]),
+      ]);
+      return {
+        triggers: triggers.rows,
+        policies: policies.rows,
+        rowSecurity: rls.rows[0] ?? { enabled: false, forced: false },
+        dependencies: deps.rows,
+        stats: stats.rows[0] ?? null,
+      };
+    }),
+  );
 }

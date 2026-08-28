@@ -112,3 +112,78 @@ SELECT table_schema AS schema, table_name AS "table",
 FROM information_schema.columns
 WHERE table_schema NOT LIKE 'pg\\_%' AND table_schema <> 'information_schema'
 GROUP BY 1, 2 ORDER BY 1, 2`;
+
+export const listTriggers = `
+SELECT t.tgname AS name, t.tgenabled <> 'D' AS enabled, pg_get_triggerdef(t.oid) AS definition
+FROM pg_trigger t
+WHERE t.tgrelid = $1::regclass AND NOT t.tgisinternal
+ORDER BY t.tgname`;
+
+export const listPolicies = `
+SELECT p.policyname AS name, p.cmd, p.permissive = 'PERMISSIVE' AS permissive,
+       p.roles::text[] AS roles, p.qual AS "using", p.with_check AS "withCheck"
+FROM pg_policies p
+WHERE p.schemaname = $1 AND p.tablename = $2
+ORDER BY p.policyname`;
+
+export const rowSecurity = `
+SELECT c.relrowsecurity AS enabled, c.relforcerowsecurity AS forced
+FROM pg_class c WHERE c.oid = $1::regclass`;
+
+export const tableDependencies = `
+SELECT 'fk' AS kind, n.nspname AS schema, c.relname AS name, con.conname AS detail
+FROM pg_constraint con
+JOIN pg_class c ON c.oid = con.conrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE con.confrelid = $1::regclass AND con.contype = 'f'
+UNION ALL
+SELECT DISTINCT CASE v.relkind WHEN 'm' THEN 'matview' ELSE 'view' END, vn.nspname, v.relname, NULL
+FROM pg_depend d
+JOIN pg_rewrite r ON r.oid = d.objid
+JOIN pg_class v ON v.oid = r.ev_class
+JOIN pg_namespace vn ON vn.oid = v.relnamespace
+WHERE d.refobjid = $1::regclass AND d.classid = 'pg_rewrite'::regclass AND v.oid <> $1::regclass
+ORDER BY 1, 2, 3`;
+
+export const tableStats = `
+SELECT s.n_live_tup::bigint AS live, s.n_dead_tup::bigint AS dead,
+       s.seq_scan::bigint AS seq_scan, s.idx_scan::bigint AS idx_scan,
+       s.last_vacuum::text, s.last_autovacuum::text, s.last_analyze::text, s.last_autoanalyze::text,
+       pg_total_relation_size(s.relid) AS total_bytes,
+       pg_relation_size(s.relid) AS table_bytes,
+       pg_indexes_size(s.relid) AS index_bytes
+FROM pg_stat_user_tables s
+WHERE s.relid = $1::regclass`;
+
+export const bloatedTables = `
+SELECT s.schemaname AS schema, s.relname AS table,
+       s.n_live_tup::bigint AS live, s.n_dead_tup::bigint AS dead,
+       CASE WHEN s.n_live_tup + s.n_dead_tup = 0 THEN 0
+            ELSE round(100.0 * s.n_dead_tup / (s.n_live_tup + s.n_dead_tup), 1) END AS dead_pct,
+       s.seq_scan::bigint AS seq_scan, s.idx_scan::bigint AS idx_scan,
+       coalesce(s.last_autovacuum, s.last_vacuum)::text AS last_vacuum,
+       pg_total_relation_size(s.relid) AS total_bytes
+FROM pg_stat_user_tables s
+ORDER BY s.n_dead_tup DESC, pg_total_relation_size(s.relid) DESC
+LIMIT $1`;
+
+export const unusedIndexes = `
+SELECT s.schemaname AS schema, s.relname AS table, s.indexrelname AS index,
+       s.idx_scan::bigint AS scans, pg_relation_size(s.indexrelid) AS bytes
+FROM pg_stat_user_indexes s
+JOIN pg_index i ON i.indexrelid = s.indexrelid
+WHERE NOT i.indisunique AND NOT i.indisprimary AND s.idx_scan < $1
+ORDER BY pg_relation_size(s.indexrelid) DESC
+LIMIT $2`;
+
+export const lockWaits = `
+SELECT w.pid AS waiting_pid, w.usename AS waiting_user, left(w.query, 300) AS waiting_query,
+       w.wait_event_type, w.wait_event,
+       extract(epoch FROM now() - w.query_start)::int AS waiting_seconds,
+       b.pid AS blocking_pid, b.usename AS blocking_user, b.state AS blocking_state,
+       left(b.query, 300) AS blocking_query
+FROM pg_stat_activity w
+JOIN LATERAL unnest(pg_blocking_pids(w.pid)) AS bp(pid) ON true
+JOIN pg_stat_activity b ON b.pid = bp.pid
+WHERE w.datname = current_database() AND cardinality(pg_blocking_pids(w.pid)) > 0
+ORDER BY w.query_start`;

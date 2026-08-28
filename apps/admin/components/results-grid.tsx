@@ -3,8 +3,10 @@
 import { Download, Search } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { updateRowsAction } from "@/app/actions/data";
+import { ColumnPicker } from "@/components/column-picker";
 import { Grid, type GridColumn } from "@/components/grid";
 import { PendingChangesBar } from "@/components/pending-changes-bar";
+import { RowDetail } from "@/components/row-detail";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { csvFileName, saveBlob, toCsv } from "@/lib/csv";
@@ -27,6 +29,8 @@ interface Props {
 export function ResultsGrid({ database, columns, rows: initial, source, links }: Props) {
   const [rows, setRows] = useState(initial);
   const [search, setSearch] = useState("");
+  const [hidden, setHidden] = useState<Set<number>>(new Set());
+  const [openRow, setOpenRow] = useState<number | null>(null);
   const rel = useMemo(
     () => ({ database, schema: source?.schema ?? "", table: source?.table ?? "" }),
     [database, source],
@@ -86,6 +90,7 @@ export function ResultsGrid({ database, columns, rows: initial, source, links }:
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <ColumnPicker columns={columns} hidden={hidden} onChange={setHidden} />
         <Button size="sm" variant="outline" onClick={download}>
           <Download />
           Download CSV
@@ -108,8 +113,17 @@ export function ResultsGrid({ database, columns, rows: initial, source, links }:
         sortable
         search={search}
         linkFor={linkFor}
+        hidden={hidden}
+        onOpenRow={setOpenRow}
         {...(source ? { edits: edits.edits, onEdit: edits.edit } : {})}
         className="min-h-0 flex-1 rounded-none border-0 bg-transparent"
+      />
+      <RowDetail
+        title={source ? `${source.schema}.${source.table}` : "Query result"}
+        columns={columns}
+        rows={rows}
+        row={openRow}
+        onChange={setOpenRow}
       />
     </div>
   );

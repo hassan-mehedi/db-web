@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import {
   deleteRows,
   insertRow,
+  insertRows,
   type Rel,
   type RowChange,
   type RowKey,
@@ -72,6 +73,23 @@ export async function deleteRowsAction(rel: Rel, keys: RowKey[]): Promise<Action
   try {
     const sql = await deleteRows(rel, keys);
     audit("delete-rows", rel.database, sql);
+    revalidatePath(path(rel));
+    return { ok: true, sql };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function insertRowsAction(
+  rel: Rel,
+  columns: string[],
+  rows: Cell[][],
+): Promise<ActionResult> {
+  await requireSession();
+  if (rows.length > 5000) return { ok: false, error: "at most 5000 rows per import" };
+  try {
+    const sql = await insertRows(rel, columns, rows);
+    audit("insert-rows", rel.database, sql);
     revalidatePath(path(rel));
     return { ok: true, sql };
   } catch (err) {
